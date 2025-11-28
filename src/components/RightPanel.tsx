@@ -378,6 +378,10 @@ export function RightPanel() {
     setRightPanelTab,
     chatMode,
     setChatMode,
+    aiPanelMode,
+    setAIPanelMode,
+    setFloatingBallPosition,
+    setFloatingBallDragging,
   } = useUIStore();
   const { 
     messages, 
@@ -406,8 +410,49 @@ export function RightPanel() {
   const [inputValue, setInputValue] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
+  const [isDraggingAI, setIsDraggingAI] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // 处理 AI tab 拖拽开始
+  const handleAIDragStart = (e: React.MouseEvent) => {
+    if (aiPanelMode === "floating") return;
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setIsDraggingAI(true);
+  };
+
+  // 处理拖拽中
+  useEffect(() => {
+    if (!isDraggingAI) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartPos.x;
+      const dy = e.clientY - dragStartPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // 拖拽超过 50px 触发悬浮模式
+      if (distance > 50) {
+        setIsDraggingAI(false);
+        setFloatingBallPosition({ x: e.clientX - 28, y: e.clientY - 28 });
+        setAIPanelMode("floating");
+        setFloatingBallDragging(true); // 继承拖拽状态到悬浮球
+        setRightPanelTab("outline"); // 自动切换到大纲
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingAI(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDraggingAI, dragStartPos, setFloatingBallPosition, setAIPanelMode]);
 
   // Auto-scroll to bottom (only within chat container, not affecting page)
   useEffect(() => {
@@ -537,18 +582,22 @@ export function RightPanel() {
     <aside className="w-full h-full bg-background border-l border-border flex flex-col transition-colors duration-300">
       {/* Tabs */}
       <div className="flex border-b border-border">
-        <button
-          onClick={() => setRightPanelTab("chat")}
-          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
-            rightPanelTab === "chat"
-              ? "text-primary border-b-2 border-primary"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          title="AI 助手"
-        >
-          {chatMode === "agent" ? <Bot size={12} /> : <BrainCircuit size={12} />}
-          <span className="hidden sm:inline">AI</span>
-        </button>
+        {/* AI Tab - 只在 docked 模式下显示 */}
+        {aiPanelMode === "docked" && (
+          <button
+            onClick={() => setRightPanelTab("chat")}
+            onMouseDown={handleAIDragStart}
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 select-none ${
+              rightPanelTab === "chat"
+                ? "text-primary border-b-2 border-primary"
+                : "text-muted-foreground hover:text-foreground"
+            } ${isDraggingAI ? "cursor-grabbing" : "cursor-grab"}`}
+            title="AI 助手 (可拖出为悬浮球)"
+          >
+            {chatMode === "agent" ? <Bot size={12} /> : <BrainCircuit size={12} />}
+            <span className="hidden sm:inline">AI</span>
+          </button>
+        )}
         <button
           onClick={() => setRightPanelTab("outline")}
           className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
@@ -587,8 +636,8 @@ export function RightPanel() {
         </button>
       </div>
 
-      {/* Chat Interface */}
-      {rightPanelTab === "chat" && (
+      {/* Chat Interface - 只在 docked 模式下显示 */}
+      {rightPanelTab === "chat" && aiPanelMode === "docked" && (
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header with Mode Toggle */}
           <div className="p-2 border-b border-border flex items-center justify-between">

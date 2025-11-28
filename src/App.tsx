@@ -16,6 +16,7 @@ import { CommandPalette, PaletteMode } from "@/components/CommandPalette";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { TabBar } from "@/components/TabBar";
 import { DiffView } from "@/components/DiffView";
+import { AIFloatingBall } from "@/components/AIFloatingBall";
 import { useAIStore } from "@/stores/useAIStore";
 import { saveFile } from "@/lib/tauri";
 
@@ -335,6 +336,9 @@ function App() {
       isOpen={searchOpen}
       onClose={() => setSearchOpen(false)}
     />
+    
+    {/* AI Floating Ball */}
+    <AIFloatingBall />
   </>);
 }
 

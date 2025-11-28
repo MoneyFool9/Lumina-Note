@@ -7,6 +7,9 @@ export type EditorMode = "reading" | "live" | "source";
 // Main view types - what shows in center area
 export type MainView = "editor" | "graph";
 
+// AI 面板模式
+export type AIPanelMode = "docked" | "floating";
+
 interface UIState {
   // Theme
   isDarkMode: boolean;
@@ -31,6 +34,17 @@ interface UIState {
   // Chat mode (simple chat vs agent)
   chatMode: "chat" | "agent";
   setChatMode: (mode: "chat" | "agent") => void;
+
+  // AI Panel (docked in right panel or floating)
+  aiPanelMode: AIPanelMode;
+  floatingBallPosition: { x: number; y: number };
+  floatingPanelOpen: boolean;
+  isFloatingBallDragging: boolean; // 悬浮球是否正在被拖拽
+  setAIPanelMode: (mode: AIPanelMode) => void;
+  setFloatingBallPosition: (pos: { x: number; y: number }) => void;
+  setFloatingPanelOpen: (open: boolean) => void;
+  toggleFloatingPanel: () => void;
+  setFloatingBallDragging: (dragging: boolean) => void;
 
   // Main view (center area)
   mainView: MainView;
@@ -87,6 +101,17 @@ export const useUIStore = create<UIState>()(
       // Chat mode
       chatMode: "agent",  // 默认使用 Agent 模式
       setChatMode: (mode) => set({ chatMode: mode }),
+
+      // AI Panel floating
+      aiPanelMode: "docked",
+      floatingBallPosition: { x: window.innerWidth - 80, y: window.innerHeight - 120 },
+      floatingPanelOpen: false,
+      isFloatingBallDragging: false,
+      setAIPanelMode: (mode) => set({ aiPanelMode: mode }),
+      setFloatingBallPosition: (pos) => set({ floatingBallPosition: pos }),
+      setFloatingPanelOpen: (open) => set({ floatingPanelOpen: open }),
+      toggleFloatingPanel: () => set((state) => ({ floatingPanelOpen: !state.floatingPanelOpen })),
+      setFloatingBallDragging: (dragging) => set({ isFloatingBallDragging: dragging }),
 
       // Main view
       mainView: "editor",
