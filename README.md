@@ -173,7 +173,3 @@ lumina-note/
 
 **License**
 * 本项目基于 [Apache License 2.0](LICENSE) 开源。
-
-<div align="center">
-    <p>Made with ❤️ by <a href="https://github.com/blueberrycongee">blueberrycongee</a></p>
-</div>
