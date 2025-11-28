@@ -2,7 +2,9 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useFileStore } from "@/stores/useFileStore";
+import { useNoteIndexStore } from "@/stores/useNoteIndexStore";
 import { EditSuggestion, applyEdit } from "@/lib/ai";
+import { getFileName } from "@/lib/utils";
 import {
   BrainCircuit,
   Send,
@@ -14,6 +16,10 @@ import {
   Loader2,
   Hash,
   List,
+  Link2,
+  Tag,
+  ArrowUpRight,
+  ChevronRight,
 } from "lucide-react";
 
 // Edit suggestion card
@@ -87,6 +93,174 @@ function parseHeadings(content: string): HeadingItem[] {
   });
   
   return headings;
+}
+
+// Backlinks view component
+function BacklinksView() {
+  const { currentFile, openFile } = useFileStore();
+  const { getBacklinks, isIndexing } = useNoteIndexStore();
+  
+  const currentFileName = useMemo(() => {
+    if (!currentFile) return "";
+    return getFileName(currentFile);
+  }, [currentFile]);
+  
+  const backlinks = useMemo(() => {
+    if (!currentFileName) return [];
+    return getBacklinks(currentFileName);
+  }, [currentFileName, getBacklinks]);
+  
+  if (!currentFile) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
+        <Link2 size={32} className="opacity-30 mb-2" />
+        <p>打开笔记后显示反向链接</p>
+      </div>
+    );
+  }
+  
+  if (isIndexing) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
+        <Loader2 size={24} className="animate-spin mb-2" />
+        <p>正在建立索引...</p>
+      </div>
+    );
+  }
+  
+  if (backlinks.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
+        <Link2 size={32} className="opacity-30 mb-2" />
+        <p>暂无反向链接</p>
+        <p className="text-xs opacity-70 mt-1">其他笔记中使用 [[{currentFileName}]] 链接到此笔记</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="p-2 border-b border-border flex items-center gap-2">
+        <Link2 size={12} className="text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">
+          {backlinks.length} 个反向链接
+        </span>
+      </div>
+      
+      {/* Backlinks list */}
+      <div className="flex-1 overflow-y-auto py-2">
+        {backlinks.map((backlink, idx) => (
+          <button
+            key={`${backlink.path}-${idx}`}
+            onClick={() => openFile(backlink.path)}
+            className="w-full text-left px-3 py-2 hover:bg-accent transition-colors group"
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <FileText size={12} className="text-primary shrink-0" />
+              <span className="text-sm font-medium truncate group-hover:text-primary">
+                {backlink.name}
+              </span>
+              <ArrowUpRight size={12} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+            {backlink.context && (
+              <p className="text-xs text-muted-foreground line-clamp-2 pl-5">
+                {backlink.context}
+              </p>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Tags view component
+function TagsView() {
+  const { allTags, isIndexing } = useNoteIndexStore();
+  const { openFile } = useFileStore();
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  
+  const toggleTag = useCallback((tag: string) => {
+    setExpandedTags(prev => {
+      const next = new Set(prev);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
+      return next;
+    });
+  }, []);
+  
+  if (isIndexing) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
+        <Loader2 size={24} className="animate-spin mb-2" />
+        <p>正在建立索引...</p>
+      </div>
+    );
+  }
+  
+  if (allTags.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
+        <Tag size={32} className="opacity-30 mb-2" />
+        <p>暂无标签</p>
+        <p className="text-xs opacity-70 mt-1">使用 #标签名 创建标签</p>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="p-2 border-b border-border flex items-center gap-2">
+        <Tag size={12} className="text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">
+          {allTags.length} 个标签
+        </span>
+      </div>
+      
+      {/* Tags list */}
+      <div className="flex-1 overflow-y-auto py-2">
+        {allTags.map((tagInfo) => (
+          <div key={tagInfo.tag}>
+            <button
+              onClick={() => toggleTag(tagInfo.tag)}
+              className="w-full text-left px-3 py-2 hover:bg-accent transition-colors flex items-center gap-2"
+            >
+              <ChevronRight 
+                size={12} 
+                className={`text-muted-foreground transition-transform ${expandedTags.has(tagInfo.tag) ? 'rotate-90' : ''}`} 
+              />
+              <Hash size={12} className="text-primary" />
+              <span className="text-sm flex-1">{tagInfo.tag}</span>
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                {tagInfo.count}
+              </span>
+            </button>
+            
+            {/* Expanded files */}
+            {expandedTags.has(tagInfo.tag) && (
+              <div className="bg-muted/30 border-l-2 border-primary/30 ml-4">
+                {tagInfo.files.map((filePath) => (
+                  <button
+                    key={filePath}
+                    onClick={() => openFile(filePath)}
+                    className="w-full text-left px-3 py-1.5 hover:bg-accent transition-colors flex items-center gap-2 text-sm"
+                  >
+                    <FileText size={12} className="text-muted-foreground" />
+                    <span className="truncate">{getFileName(filePath)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // Outline view component
@@ -195,7 +369,13 @@ function OutlineView() {
 }
 
 export function RightPanel() {
-  const { rightPanelTab, setRightPanelTab } = useUIStore();
+  const { 
+    rightPanelTab, 
+    setRightPanelTab 
+  }: { 
+    rightPanelTab: "chat" | "outline" | "backlinks" | "tags"; 
+    setRightPanelTab: (tab: "chat" | "outline" | "backlinks" | "tags") => void; 
+  } = useUIStore();
   const { 
     messages, 
     isLoading, 
@@ -227,6 +407,20 @@ export function RightPanel() {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Listen for tag-clicked events to switch to Tags tab
+  useEffect(() => {
+    const handleTagClicked = (e: CustomEvent<{ tag: string }>) => {
+      setRightPanelTab("tags");
+      // Optionally scroll to or highlight the clicked tag
+      console.log("Tag clicked:", e.detail.tag);
+    };
+    
+    window.addEventListener("tag-clicked", handleTagClicked as EventListener);
+    return () => {
+      window.removeEventListener("tag-clicked", handleTagClicked as EventListener);
+    };
+  }, [setRightPanelTab]);
 
   // Get current file info for AI context
   const currentFileInfo = useMemo(() => {
@@ -337,23 +531,51 @@ export function RightPanel() {
       <div className="flex border-b border-border">
         <button
           onClick={() => setRightPanelTab("chat")}
-          className={`flex-1 py-3 text-xs font-medium transition-colors ${
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
             rightPanelTab === "chat"
               ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
+          title="AI 对话"
         >
-          对话
+          <BrainCircuit size={12} />
+          <span className="hidden sm:inline">对话</span>
         </button>
         <button
           onClick={() => setRightPanelTab("outline")}
-          className={`flex-1 py-3 text-xs font-medium transition-colors ${
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
             rightPanelTab === "outline"
               ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
+          title="大纲视图"
         >
-          大纲
+          <List size={12} />
+          <span className="hidden sm:inline">大纲</span>
+        </button>
+        <button
+          onClick={() => setRightPanelTab("backlinks")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+            rightPanelTab === "backlinks"
+              ? "text-primary border-b-2 border-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="反向链接"
+        >
+          <Link2 size={12} />
+          <span className="hidden sm:inline">链接</span>
+        </button>
+        <button
+          onClick={() => setRightPanelTab("tags")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1 ${
+            rightPanelTab === "tags"
+              ? "text-primary border-b-2 border-primary"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="标签"
+        >
+          <Tag size={12} />
+          <span className="hidden sm:inline">标签</span>
         </button>
       </div>
 
@@ -608,6 +830,12 @@ export function RightPanel() {
 
       {/* Outline View */}
       {rightPanelTab === "outline" && <OutlineView />}
+      
+      {/* Backlinks View */}
+      {rightPanelTab === "backlinks" && <BacklinksView />}
+      
+      {/* Tags View */}
+      {rightPanelTab === "tags" && <TagsView />}
     </aside>
   );
 }

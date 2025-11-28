@@ -698,3 +698,64 @@ body {
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* ===== Image Styles ===== */
+.markdown-image,
+.prose img,
+.tiptap img,
+.live-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+  display: block;
+  box-shadow: 0 2px 8px hsl(var(--foreground) / 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.markdown-image:hover,
+.prose img:hover,
+.tiptap img:hover,
+.live-preview img:hover {
+  transform: scale(1.01);
+  box-shadow: 0 4px 16px hsl(var(--foreground) / 0.15);
+}
+
+/* Center images */
+.prose p > img:only-child,
+.live-preview p > img:only-child {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Image caption support */
+.prose figcaption,
+.live-preview figcaption {
+  text-align: center;
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.5rem;
+}
+
+/* ===== Tag Styles ===== */
+.tag,
+.prose .tag,
+.live-preview .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tag:hover,
+.prose .tag:hover,
+.live-preview .tag:hover {
+  background: hsl(var(--primary) / 0.2);
+}

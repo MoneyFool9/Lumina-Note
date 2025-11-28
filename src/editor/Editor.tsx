@@ -23,6 +23,7 @@ import {
   Redo2,
   ChevronLeft,
   ChevronRight,
+  Columns,
 } from "lucide-react";
 import { TabBar } from "@/components/TabBar";
 import { cn } from "@/lib/utils";
@@ -57,7 +58,8 @@ export function Editor() {
     toggleLeftSidebar, 
     toggleRightSidebar, 
     editorMode, 
-    setEditorMode 
+    setEditorMode,
+    toggleSplitView,
   } = useUIStore();
 
   // 全局键盘快捷键
@@ -268,6 +270,13 @@ export function Editor() {
           <span className="text-xs text-muted-foreground">
             {isSaving ? "保存中..." : isDirty ? "已编辑" : "已保存"}
           </span>
+          <button
+            onClick={toggleSplitView}
+            className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
+            title="分屏编辑"
+          >
+            <Columns size={16} />
+          </button>
           <button
             onClick={toggleRightSidebar}
             className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"

@@ -296,22 +296,31 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                   {/* Matches */}
                   {expandedFiles.has(result.path) && (
                     <div className="bg-muted/30">
-                      {result.matches.slice(0, 10).map((match, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => jumpToMatch(result, match)}
-                          className="w-full flex items-start gap-2 px-3 py-1.5 hover:bg-muted transition-colors text-left"
-                        >
-                          <span className="text-xs text-muted-foreground w-8 shrink-0 text-right">
-                            {match.line}
-                          </span>
-                          <span className="text-xs font-mono truncate">
-                            {match.content}
-                          </span>
-                        </button>
-                      ))}
+                      {result.matches.slice(0, 10).map((match, idx) => {
+                        // Highlight the matched text
+                        const before = match.content.slice(0, match.matchStart);
+                        const matched = match.content.slice(match.matchStart, match.matchEnd);
+                        const after = match.content.slice(match.matchEnd);
+                        
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => jumpToMatch(result, match)}
+                            className="w-full flex items-start gap-2 px-3 py-2 hover:bg-muted transition-colors text-left group"
+                          >
+                            <span className="text-xs text-muted-foreground w-8 shrink-0 text-right font-mono">
+                              {match.line}
+                            </span>
+                            <span className="text-xs font-mono truncate flex-1">
+                              <span className="text-muted-foreground">{before.slice(-30)}</span>
+                              <span className="bg-yellow-400/40 text-foreground font-semibold px-0.5 rounded">{matched}</span>
+                              <span className="text-muted-foreground">{after.slice(0, 30)}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
                       {result.matches.length > 10 && (
-                        <div className="px-3 py-1.5 text-xs text-muted-foreground">
+                        <div className="px-3 py-1.5 text-xs text-muted-foreground italic">
                           ...还有 {result.matches.length - 10} 个匹配
                         </div>
                       )}

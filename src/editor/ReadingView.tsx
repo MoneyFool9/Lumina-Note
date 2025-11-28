@@ -14,9 +14,11 @@ export function ReadingView({ content, className = "" }: ReadingViewProps) {
     return parseMarkdown(content);
   }, [content]);
 
-  // Handle WikiLink clicks
+  // Handle WikiLink and Tag clicks
   const handleClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+    
+    // Handle WikiLink clicks
     if (target.classList.contains("wikilink")) {
       e.preventDefault();
       const linkName = target.getAttribute("data-wikilink");
@@ -43,6 +45,18 @@ export function ReadingView({ content, className = "" }: ReadingViewProps) {
         } else {
           console.log(`笔记不存在: ${linkName}`);
         }
+      }
+    }
+    
+    // Handle Tag clicks - dispatch event to show tag in sidebar
+    if (target.classList.contains("tag")) {
+      e.preventDefault();
+      const tagName = target.getAttribute("data-tag");
+      if (tagName) {
+        // Dispatch custom event for the right panel to handle
+        window.dispatchEvent(
+          new CustomEvent("tag-clicked", { detail: { tag: tagName } })
+        );
       }
     }
   }, [fileTree, openFile]);

@@ -25,8 +25,8 @@ interface UIState {
   setRightSidebarWidth: (width: number) => void;
 
   // Right panel tabs
-  rightPanelTab: "chat" | "outline";
-  setRightPanelTab: (tab: "chat" | "outline") => void;
+  rightPanelTab: "chat" | "outline" | "backlinks" | "tags";
+  setRightPanelTab: (tab: "chat" | "outline" | "backlinks" | "tags") => void;
 
   // Main view (center area)
   mainView: MainView;
@@ -35,6 +35,12 @@ interface UIState {
   // Editor mode
   editorMode: EditorMode;
   setEditorMode: (mode: EditorMode) => void;
+
+  // Split view
+  splitView: boolean;
+  splitDirection: "horizontal" | "vertical";
+  toggleSplitView: () => void;
+  setSplitDirection: (dir: "horizontal" | "vertical") => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -81,6 +87,12 @@ export const useUIStore = create<UIState>()(
       // Editor mode - default to live preview
       editorMode: "live",
       setEditorMode: (mode) => set({ editorMode: mode }),
+
+      // Split view
+      splitView: false,
+      splitDirection: "horizontal",
+      toggleSplitView: () => set((state) => ({ splitView: !state.splitView })),
+      setSplitDirection: (dir) => set({ splitDirection: dir }),
     }),
     {
       name: "neurone-ui",

@@ -6,8 +6,10 @@ import { ResizeHandle } from "@/components/ResizeHandle";
 import { Ribbon } from "@/components/Ribbon";
 import { KnowledgeGraph } from "@/components/KnowledgeGraph";
 import { Editor } from "@/editor/Editor";
+import { SplitEditor } from "@/components/SplitEditor";
 import { useFileStore } from "@/stores/useFileStore";
 import { useUIStore } from "@/stores/useUIStore";
+import { useNoteIndexStore } from "@/stores/useNoteIndexStore";
 import { FolderOpen, Sparkles } from "lucide-react";
 import { CommandPalette, PaletteMode } from "@/components/CommandPalette";
 import { GlobalSearch } from "@/components/GlobalSearch";
@@ -86,8 +88,9 @@ function DiffViewWrapper() {
 }
 
 function App() {
-  const { vaultPath, setVaultPath, currentFile, save, createNewFile, tabs, activeTabIndex } = useFileStore();
+  const { vaultPath, setVaultPath, currentFile, save, createNewFile, tabs, activeTabIndex, fileTree } = useFileStore();
   const { pendingDiff } = useAIStore();
+  const { buildIndex } = useNoteIndexStore();
   
   // Get active tab
   const activeTab = activeTabIndex >= 0 ? tabs[activeTabIndex] : null;
@@ -103,7 +106,15 @@ function App() {
     setRightSidebarWidth,
     toggleLeftSidebar,
     toggleRightSidebar,
+    splitView,
   } = useUIStore();
+
+  // Build note index when file tree changes
+  useEffect(() => {
+    if (fileTree.length > 0) {
+      buildIndex(fileTree);
+    }
+  }, [fileTree, buildIndex]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -256,11 +267,14 @@ function App() {
         />
       )}
 
-      {/* Main content - switches between Editor, Graph, and Diff based on state */}
+      {/* Main content - switches between Editor, Graph, Split, and Diff based on state */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {pendingDiff ? (
           // Show diff view when there's a pending AI edit
           <DiffViewWrapper />
+        ) : splitView && currentFile ? (
+          // Show split editor when enabled
+          <SplitEditor />
         ) : activeTab?.type === "graph" ? (
           <EditorWithGraph />
         ) : currentFile ? (

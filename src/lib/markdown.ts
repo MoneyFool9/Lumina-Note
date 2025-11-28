@@ -55,6 +55,26 @@ renderer.blockquote = function (quote: string | { text: string }) {
   }
 };
 
+// Custom image renderer to handle local paths and external URLs
+renderer.image = function (token: { href: string; title: string | null; text: string }) {
+  try {
+    const { href, title, text } = token;
+    if (!href) return "";
+    
+    // Convert local paths to asset URLs (for Tauri)
+    let imageSrc = href;
+    if (href.startsWith("./") || href.startsWith("../") || (!href.startsWith("http") && !href.startsWith("data:"))) {
+      // For local images, we'll use a special protocol or keep relative
+      imageSrc = href;
+    }
+    
+    const titleAttr = title ? ` title="${title}"` : "";
+    return `<img src="${imageSrc}" alt="${text || ""}"${titleAttr} class="markdown-image" loading="lazy" />`;
+  } catch (e) {
+    return "";
+  }
+};
+
 // Create a configured marked instance with KaTeX support
 const markedInstance = new Marked({
   gfm: true,
@@ -169,6 +189,12 @@ function preprocessMarkdown(markdown: string): string {
     const displayText = display || link;
     const linkName = link.trim();
     return `<span class="wikilink" data-wikilink="${linkName}">${displayText}</span>`;
+  });
+  
+  // Convert #tags to styled spans (but not in code blocks or URLs)
+  // Match #tag at word boundaries, supporting Chinese characters
+  result = result.replace(/(?<![`\w\/])#([a-zA-Z\u4e00-\u9fa5][a-zA-Z0-9\u4e00-\u9fa5_-]*)/g, (_match, tag) => {
+    return `<span class="tag" data-tag="${tag}">#${tag}</span>`;
   });
   
   // Simple approach: add spaces around inline math $...$ when adjacent to CJK/punctuation
