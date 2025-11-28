@@ -90,7 +90,7 @@ function DiffViewWrapper() {
 }
 
 function App() {
-  const { vaultPath, setVaultPath, currentFile, save, createNewFile, tabs, activeTabIndex, fileTree } = useFileStore();
+  const { vaultPath, setVaultPath, currentFile, save, createNewFile, tabs, activeTabIndex, fileTree, refreshFileTree } = useFileStore();
   const { pendingDiff } = useAIStore();
   const { buildIndex } = useNoteIndexStore();
   const { initialize: initializeRAG, config: ragConfig } = useRAGStore();
@@ -100,6 +100,15 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("command");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [isLoadingVault, setIsLoadingVault] = useState(false);
+  
+  // 启动时自动加载保存的工作空间
+  useEffect(() => {
+    if (vaultPath && fileTree.length === 0 && !isLoadingVault) {
+      setIsLoadingVault(true);
+      refreshFileTree().finally(() => setIsLoadingVault(false));
+    }
+  }, []);
   const {
     leftSidebarOpen,
     rightSidebarOpen,

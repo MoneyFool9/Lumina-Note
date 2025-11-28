@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { FileEntry, listDirectory, readFile, saveFile, createFile } from "@/lib/tauri";
 
 // 历史记录条目
@@ -85,13 +86,18 @@ interface FileState {
   goForward: () => void;
   canGoBack: () => boolean;
   canGoForward: () => boolean;
+  
+  // Workspace actions
+  clearVault: () => void;
 }
 
 // 用户编辑的 debounce 时间（毫秒）
 const USER_EDIT_DEBOUNCE = 1000;
 let lastUserEditTime = 0;
 
-export const useFileStore = create<FileState>((set, get) => ({
+export const useFileStore = create<FileState>()(
+  persist(
+    (set, get) => ({
   // Initial state
   vaultPath: null,
   fileTree: [],
@@ -660,4 +666,29 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { navigationHistory, navigationIndex } = get();
     return navigationIndex < navigationHistory.length - 1;
   },
-}));
+  
+  // Clear vault and reset to welcome screen
+  clearVault: () => {
+    set({
+      vaultPath: null,
+      fileTree: [],
+      tabs: [],
+      activeTabIndex: -1,
+      currentFile: null,
+      currentContent: "",
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+      navigationHistory: [],
+      navigationIndex: -1,
+    });
+  },
+}),
+    {
+      name: "lumina-workspace",
+      partialize: (state) => ({
+        vaultPath: state.vaultPath,  // 只持久化工作空间路径
+      }),
+    }
+  )
+);

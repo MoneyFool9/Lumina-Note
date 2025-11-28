@@ -52,6 +52,7 @@ export function CommandPalette({ isOpen, mode, onClose, onModeChange }: CommandP
     vaultPath,
     openGraphTab,
     tabs,
+    clearVault,
   } = useFileStore();
 
   const {
@@ -151,14 +152,13 @@ export function CommandPalette({ isOpen, mode, onClose, onModeChange }: CommandP
       },
     },
     {
-      id: "open-folder",
-      label: "打开文件夹",
-      description: `当前: ${vaultPath || "未选择"}`,
+      id: "switch-workspace",
+      label: "切换工作空间",
+      description: `当前: ${vaultPath ? vaultPath.split(/[/\\]/).pop() : "未选择"}`,
       icon: <FolderOpen size={16} />,
       action: () => {
         onClose();
-        // This would trigger the folder dialog - needs to be handled in App
-        window.dispatchEvent(new CustomEvent("open-vault"));
+        clearVault();  // 清除当前工作空间，回到欢迎页
       },
     },
     {
