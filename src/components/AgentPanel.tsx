@@ -11,6 +11,7 @@ import { MODES, getModeList } from "@/agent/modes";
 import { AgentModeSlug, Message } from "@/agent/types";
 import { parseMarkdown } from "@/lib/markdown";
 import { ChatInput, type ReferencedFile } from "./ChatInput";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { readFile } from "@/lib/tauri";
 import {
   Square,
@@ -24,12 +25,18 @@ import {
   AlertCircle,
   Bot,
   Wrench,
+  Mic,
+  MicOff,
+  Send,
 } from "lucide-react";
 
 export function AgentPanel() {
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { isRecording, interimText, toggleRecording } = useSpeechToText((text: string) => {
+    setInput((prev) => (prev ? prev + " " + text : text));
+  });
 
   const {
     status,
@@ -169,7 +176,7 @@ export function AgentPanel() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 输入区域 - 支持 @ 引用和拖拽 */}
+        {/* 输入区域 - 样式对齐 Chat 输入框（自定义 textarea + 统一底部按钮） */}
         <div className="p-3 border-t border-border">
           <div className="mb-2 flex justify-between items-center">
             <span className="text-xs text-muted-foreground">
@@ -186,16 +193,58 @@ export function AgentPanel() {
               </button>
             )}
           </div>
-          <ChatInput
-            value={input}
-            onChange={setInput}
-            onSend={handleSendWithFiles}
-            isLoading={status === "running"}
-            isStreaming={status === "running"}
-            onStop={abort}
-            placeholder="输入任务指令... (@ 引用文件)"
-            rows={3}
-          />
+
+          <div className="bg-muted/30 border border-border rounded-lg p-2 focus-within:ring-1 focus-within:ring-primary/50 transition-all">
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={handleSendWithFiles}
+              isLoading={status === "running"}
+              isStreaming={status === "running"}
+              onStop={abort}
+              placeholder="输入任务指令... (@ 引用文件)"
+              rows={3}
+              hideSendButton={true}
+            />
+            <div className="flex items-center mt-2 gap-2">
+              <div className="flex gap-2 items-center text-xs text-muted-foreground shrink-0">
+                <span>@ 添加文件</span>
+              </div>
+              {/* 流式显示中间识别结果 */}
+              <div className="flex-1 truncate text-sm text-foreground/70 italic">
+                {interimText && <span className="animate-pulse">{interimText}...</span>}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className={`p-1.5 rounded-md border flex items-center justify-center transition-colors relative ${
+                    isRecording
+                      ? "bg-red-500/20 border-red-500 text-red-500"
+                      : "bg-background border-border text-muted-foreground hover:bg-accent"
+                  }`}
+                  title={isRecording ? "停止语音输入" : "开始语音输入"}
+                >
+                  {isRecording && (
+                    <span className="absolute inset-0 rounded-md animate-ping bg-red-500/30" />
+                  )}
+                  {isRecording ? <MicOff size={14} className="relative z-10" /> : <Mic size={14} />}
+                </button>
+                <button
+                  onClick={() => handleSendWithFiles(input, [])}
+                  disabled={!input.trim() || status === "running"}
+                  className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded p-1.5 transition-colors flex items-center justify-center"
+                  title="发送"
+                >
+                  {status === "running" ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Send size={14} />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
     </div>
   );

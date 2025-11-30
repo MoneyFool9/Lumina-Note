@@ -134,6 +134,7 @@ export const PROVIDER_REGISTRY: Record<LLMProviderType, ProviderMeta> = {
     defaultBaseUrl: "https://api.moonshot.cn/v1",
     models: [
       { id: "kimi-k2-0711-preview", name: "Kimi K2", contextWindow: 131072 },
+      { id: "kimi-k2-thinking", name: "Kimi K2 Thinking", contextWindow: 131072, supportsThinking: true },
       { id: "moonshot-v1-128k", name: "Moonshot v1 128K", contextWindow: 128000 },
       { id: "moonshot-v1-32k", name: "Moonshot v1 32K", contextWindow: 32000 },
       { id: "moonshot-v1-8k", name: "Moonshot v1 8K", contextWindow: 8000 },

@@ -23,7 +23,10 @@ import {
   ArrowUpRight,
   ChevronRight,
   Bot,
+  Mic,
+  MicOff,
 } from "lucide-react";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { AgentPanel } from "./AgentPanel";
 import { ConversationList } from "./ConversationList";
 
@@ -406,6 +409,7 @@ export function RightPanel() {
     isIndexing: ragIsIndexing,
     indexStatus,
     rebuildIndex,
+    cancelIndex,
   } = useRAGStore();
   
   const [inputValue, setInputValue] = useState("");
@@ -415,6 +419,9 @@ export function RightPanel() {
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const { isRecording, interimText, toggleRecording } = useSpeechToText((text: string) => {
+    setInputValue((prev) => (prev ? prev + " " + text : text));
+  });
 
   // 处理 AI tab 拖拽开始
   const handleAIDragStart = (e: React.MouseEvent) => {
@@ -504,6 +511,8 @@ export function RightPanel() {
       handleSend();
     }
   };
+
+  // STT 逻辑通过 useSpeechToText 统一管理
 
   // Preview edit in diff view
   const handlePreviewEdit = useCallback((edit: EditSuggestion) => {
@@ -788,6 +797,40 @@ export function RightPanel() {
                 
                 {ragConfig.enabled && (
                   <>
+                    {/* RAG 当前状态 + 操作按钮 */}
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">
+                        {ragIsIndexing
+                          ? `正在索引${
+                              typeof indexStatus?.progress === "number"
+                                ? `：${Math.round(indexStatus.progress * 100)}%`
+                                : "..."
+                            }`
+                          : indexStatus
+                            ? `已索引 ${indexStatus.totalChunks ?? 0} 个片段`
+                            : "尚未建立索引"}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={rebuildIndex}
+                          disabled={ragIsIndexing}
+                          className="px-2 py-1 rounded border border-border text-xs hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          重新索引
+                        </button>
+                        {ragIsIndexing && (
+                          <button
+                            type="button"
+                            onClick={cancelIndex}
+                            className="px-2 py-1 rounded border border-red-500/60 text-xs text-red-500 hover:bg-red-500/10"
+                          >
+                            取消索引
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">Embedding 服务</label>
                       <select
@@ -1122,8 +1165,8 @@ export function RightPanel() {
                 placeholder="输入消息..."
                 className="w-full bg-transparent resize-none outline-none text-sm min-h-[60px] max-h-32 text-foreground placeholder-muted-foreground"
               />
-              <div className="flex justify-between items-center mt-2">
-                <div className="flex gap-2">
+              <div className="flex items-center mt-2 gap-2">
+                <div className="flex gap-2 items-center shrink-0">
                   <button
                     onClick={() => setShowFilePicker(!showFilePicker)}
                     className="text-muted-foreground hover:text-foreground transition-colors p-1"
@@ -1135,13 +1178,39 @@ export function RightPanel() {
                     @ 添加文件
                   </span>
                 </div>
-                <button
-                  onClick={handleSend}
-                  disabled={!inputValue.trim() || isLoading}
-                  className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded p-1.5 transition-colors"
-                >
-                  <Send size={14} />
-                </button>
+                {/* 流式显示中间识别结果 */}
+                <div className="flex-1 truncate text-sm text-foreground/70 italic">
+                  {interimText && <span className="animate-pulse">{interimText}...</span>}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`p-1.5 rounded-md border flex items-center justify-center transition-colors relative ${
+                      isRecording
+                        ? "bg-red-500/20 border-red-500 text-red-500"
+                        : "bg-background border-border text-muted-foreground hover:bg-accent"
+                    }`}
+                    title={isRecording ? "停止语音输入" : "开始语音输入"}
+                  >
+                    {isRecording && (
+                      <span className="absolute inset-0 rounded-md animate-ping bg-red-500/30" />
+                    )}
+                    {isRecording ? <MicOff size={14} className="relative z-10" /> : <Mic size={14} />}
+                  </button>
+                  <button
+                    onClick={handleSend}
+                    disabled={!inputValue.trim() || isLoading}
+                    className="bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded p-1.5 transition-colors flex items-center justify-center"
+                    title="发送"
+                  >
+                    {isLoading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Send size={14} />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

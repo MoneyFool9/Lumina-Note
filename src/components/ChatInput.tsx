@@ -25,6 +25,7 @@ interface ChatInputProps {
   placeholder?: string;
   className?: string;
   rows?: number;
+  hideSendButton?: boolean;
 }
 
 export function ChatInput({
@@ -37,6 +38,7 @@ export function ChatInput({
   placeholder = "输入消息... (@ 引用文件)",
   className,
   rows = 2,
+  hideSendButton = false,
 }: ChatInputProps) {
   const { fileTree } = useFileStore();
   const [showMention, setShowMention] = useState(false);
@@ -286,22 +288,24 @@ export function ChatInput({
           )}
         </div>
 
-        {isStreaming ? (
-          <button
-            onClick={onStop}
-            className="self-end bg-red-500 hover:bg-red-600 text-white rounded-lg p-2 transition-colors"
-            title="停止生成"
-          >
-            <span className="block w-4 h-4 bg-white rounded-sm" />
-          </button>
-        ) : (
-          <button
-            onClick={handleSend}
-            disabled={(!value.trim() && referencedFiles.length === 0) || isLoading}
-            className="self-end bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg p-2 transition-colors"
-          >
-            {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
+        {!hideSendButton && (
+          isStreaming ? (
+            <button
+              onClick={onStop}
+              className="self-end bg-red-500 hover:bg-red-600 text-white rounded-lg p-2 transition-colors"
+              title="停止生成"
+            >
+              <span className="block w-4 h-4 bg-white rounded-sm" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={(!value.trim() && referencedFiles.length === 0) || isLoading}
+              className="self-end bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg p-2 transition-colors"
+            >
+              {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          )
         )}
       </div>
 

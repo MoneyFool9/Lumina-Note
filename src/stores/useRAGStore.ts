@@ -24,6 +24,7 @@ interface RAGState {
   // 操作
   initialize: (workspacePath: string) => Promise<void>;
   rebuildIndex: () => Promise<void>;
+  cancelIndex: () => void;
   search: (query: string, options?: { limit?: number; directory?: string }) => Promise<SearchResult[]>;
   getStatus: () => Promise<IndexStatus | null>;
 }
@@ -142,10 +143,22 @@ export const useRAGStore = create<RAGState>()(
           const newStatus = await ragManager.getStatus();
           set({ indexStatus: newStatus, isIndexing: false });
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : "索引重建失败";
-          set({ lastError: errorMsg, isIndexing: false });
           console.error("[RAG] Rebuild error:", error);
         }
+      },
+
+      // 取消索引（前端软取消，解锁 UI 状态）
+      cancelIndex: () => {
+        const status = get().indexStatus;
+        set({
+          isIndexing: false,
+          indexStatus: status
+            ? {
+                ...status,
+                isIndexing: false,
+              }
+            : null,
+        });
       },
 
       // 搜索
