@@ -66,6 +66,15 @@ export function Ribbon() {
     <div className="w-12 h-full bg-muted/30 border-r border-border flex flex-col items-center py-2 gap-1">
       {/* Top icons */}
       <div className="flex flex-col items-center gap-1">
+        {/* Search */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent("open-global-search"))}
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+          title="全局搜索 (Ctrl+Shift+F)"
+        >
+          <Search size={20} />
+        </button>
+
         {/* Files/Editor */}
         <button
           onClick={handleSwitchToFiles}
@@ -92,15 +101,6 @@ export function Ribbon() {
           title="关系图谱"
         >
           <Network size={20} />
-        </button>
-
-        {/* Search */}
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent("open-global-search"))}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-          title="全局搜索 (Ctrl+Shift+F)"
-        >
-          <Search size={20} />
         </button>
 
         {/* Video Note */}
