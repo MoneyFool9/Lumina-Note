@@ -5,6 +5,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { Embedder } from "./embedder";
+import { Reranker } from "./reranker";
 import { MarkdownChunker } from "./chunker";
 import { VectorStore } from "./vectorStore";
 import type {
@@ -25,6 +26,7 @@ export type IndexProgressCallback = (progress: IndexProgress) => void;
 
 export class RAGManager {
   private embedder: Embedder;
+  private reranker: Reranker;
   private chunker: MarkdownChunker;
   private vectorStore: VectorStore;
   private config: RAGConfig;
@@ -34,6 +36,7 @@ export class RAGManager {
   constructor(config: RAGConfig) {
     this.config = config;
     this.embedder = new Embedder(config);
+    this.reranker = new Reranker(config);
     this.chunker = new MarkdownChunker(config);
     // VectorStore will be initialized with actual path later
     this.vectorStore = null as unknown as VectorStore;
@@ -45,6 +48,7 @@ export class RAGManager {
   updateConfig(config: Partial<RAGConfig>): void {
     this.config = { ...this.config, ...config };
     this.embedder.updateConfig(this.config);
+    this.reranker.updateConfig(this.config);
     this.chunker.updateConfig(this.config);
   }
 
@@ -214,12 +218,25 @@ export class RAGManager {
     // 生成查询向量
     const { embedding } = await this.embedder.embed(query);
 
-    // 搜索
-    return await this.vectorStore.search(embedding, {
-      limit: options?.limit ?? this.config.maxResults,
+    // 向量搜索（如果启用重排序，获取更多结果以供重排）
+    const searchLimit = this.reranker.isEnabled() 
+      ? Math.max((options?.limit ?? this.config.maxResults) * 3, 20)
+      : (options?.limit ?? this.config.maxResults);
+
+    let results = await this.vectorStore.search(embedding, {
+      limit: searchLimit,
       minScore: options?.minScore ?? this.config.minScore,
       directory: options?.directory,
     });
+
+    // 如果启用了重排序，进行 rerank
+    if (this.reranker.isEnabled() && results.length > 0) {
+      results = await this.reranker.rerank(query, results);
+      // rerank 后截取用户要求的数量
+      results = results.slice(0, options?.limit ?? this.config.maxResults);
+    }
+
+    return results;
   }
 
   /**
@@ -250,22 +267,28 @@ export class RAGManager {
     content: string;
     modified: number;
   }[]> {
+    console.log("[RAG] Scanning workspace:", workspacePath);
+    
     // 使用 Tauri 的 list_directory 获取文件列表
+    // 注意: Rust 返回 snake_case (is_dir)，需要匹配
     const entries = await invoke<Array<{
       path: string;
       name: string;
-      isDir: boolean;
+      is_dir: boolean;  // Rust snake_case
       children?: unknown[];
     }>>("list_directory", { path: workspacePath });
+
+    console.log("[RAG] Root entries count:", entries.length);
 
     const files: { path: string; content: string; modified: number }[] = [];
 
     // 递归收集所有 .md 文件
-    const collectFiles = async (items: typeof entries) => {
+    const collectFiles = async (items: typeof entries, depth = 0) => {
       for (const item of items) {
-        if (item.isDir) {
-          if (item.children) {
-            await collectFiles(item.children as typeof entries);
+        if (item.is_dir) {
+          if (item.children && item.children.length > 0) {
+            console.log(`[RAG] ${"  ".repeat(depth)}📁 ${item.name} (${(item.children as unknown[]).length} items)`);
+            await collectFiles(item.children as typeof entries, depth + 1);
           }
         } else if (item.path.endsWith(".md")) {
           try {
@@ -274,13 +297,14 @@ export class RAGManager {
             const modified = Date.now();
             files.push({ path: item.path, content, modified });
           } catch (e) {
-            console.warn(`Failed to read file: ${item.path}`, e);
+            console.warn(`[RAG] Failed to read file: ${item.path}`, e);
           }
         }
       }
     };
 
     await collectFiles(entries);
+    console.log("[RAG] Total .md files found:", files.length);
     return files;
   }
 }

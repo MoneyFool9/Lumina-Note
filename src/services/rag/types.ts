@@ -59,10 +59,19 @@ export interface IndexStatus {
 
 export interface RAGConfig {
   enabled: boolean;
+  // Embedding 配置
   embeddingProvider: "openai" | "ollama";
   embeddingModel: string;
   embeddingApiKey?: string;
   embeddingBaseUrl?: string;
+  embeddingDimensions?: number;  // 向量维度（可选，如 1024）
+  // Reranker 配置
+  rerankerEnabled: boolean;
+  rerankerModel?: string;
+  rerankerApiKey?: string;
+  rerankerBaseUrl?: string;
+  rerankerTopN?: number;         // 重排序后返回前 N 个
+  // 通用配置
   chunkSize: number;      // 分块大小 (字符)
   chunkOverlap: number;   // 重叠字符数
   minScore: number;       // 最低相似度
@@ -71,8 +80,15 @@ export interface RAGConfig {
 
 export const DEFAULT_RAG_CONFIG: RAGConfig = {
   enabled: true,
+  // Embedding
   embeddingProvider: "openai",
   embeddingModel: "text-embedding-3-small",
+  embeddingDimensions: undefined,
+  // Reranker
+  rerankerEnabled: false,
+  rerankerModel: "BAAI/bge-reranker-v2-m3",
+  rerankerTopN: 5,
+  // 通用
   chunkSize: 1500,
   chunkOverlap: 200,
   minScore: 0.5,
@@ -93,6 +109,21 @@ export interface BatchEmbeddingResult {
   embeddings: number[][];
   usage?: {
     promptTokens: number;
+    totalTokens: number;
+  };
+}
+
+// ============ Reranker 服务 ============
+
+export interface RerankResult {
+  index: number;
+  relevanceScore: number;
+  document?: string;
+}
+
+export interface RerankResponse {
+  results: RerankResult[];
+  usage?: {
     totalTokens: number;
   };
 }

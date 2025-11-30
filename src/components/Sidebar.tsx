@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useFileStore } from "@/stores/useFileStore";
-import { useUIStore } from "@/stores/useUIStore";
+import { useRAGStore } from "@/stores/useRAGStore";
 import { FileEntry, deleteFile, renameFile, createFile, createDir, exists, openNewWindow } from "@/lib/tauri";
 import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
@@ -15,8 +15,6 @@ import {
   RefreshCw,
   MoreHorizontal,
   Calendar,
-  Sun,
-  Moon,
   FilePlus,
   FolderPlus,
   AppWindow,
@@ -40,7 +38,7 @@ interface CreatingState {
 export function Sidebar() {
   const { vaultPath, fileTree, currentFile, openFile, refreshFileTree, isLoadingTree, closeFile, openDatabaseTab } =
     useFileStore();
-  const { isDarkMode, toggleTheme } = useUIStore();
+  const { config: ragConfig, isIndexing: ragIsIndexing, indexStatus } = useRAGStore();
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -509,23 +507,47 @@ export function Sidebar() {
 
       {/* Status Bar */}
       <div className="p-3 border-t border-border text-xs text-muted-foreground flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-            <span>索引: 已同步</span>
-          </div>
-          <button
-            onClick={toggleTheme}
-            className="p-1 rounded hover:bg-accent transition-colors"
-            title="切换深色/浅色模式"
-          >
-            {isDarkMode ? (
-              <Sun size={14} className="text-yellow-400" />
-            ) : (
-              <Moon size={14} />
+        {/* RAG 索引状态 */}
+        {ragConfig.enabled && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                ragIsIndexing ? 'bg-yellow-500 animate-pulse' : 
+                indexStatus?.initialized ? 'bg-green-500' : 'bg-gray-400'
+              }`}></div>
+              <span>
+                {ragIsIndexing ? '索引中...' : 
+                 indexStatus?.initialized ? `索引: ${indexStatus.totalFiles} 文件` : '索引: 未初始化'}
+              </span>
+            </div>
+            
+            {/* 索引进度条 */}
+            {ragIsIndexing && indexStatus?.progress && (
+              <div className="space-y-1">
+                <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="bg-primary h-full transition-all duration-300"
+                    style={{ 
+                      width: `${Math.round((indexStatus.progress.current / Math.max(indexStatus.progress.total, 1)) * 100)}%` 
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>{indexStatus.progress.current}/{indexStatus.progress.total}</span>
+                  <span>{Math.round((indexStatus.progress.current / Math.max(indexStatus.progress.total, 1)) * 100)}%</span>
+                </div>
+              </div>
             )}
-          </button>
-        </div>
+          </div>
+        )}
+        
+        {/* RAG 未启用时显示提示 */}
+        {!ragConfig.enabled && (
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+            <span>索引: 未启用</span>
+          </div>
+        )}
       </div>
     </aside>
   );

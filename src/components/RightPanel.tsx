@@ -827,31 +827,108 @@ export function RightPanel() {
                     </div>
 
                     <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Embedding Base URL</label>
+                      <input
+                        type="text"
+                        value={ragConfig.embeddingBaseUrl || ""}
+                        onChange={(e) => setRAGConfig({ embeddingBaseUrl: e.target.value })}
+                        placeholder={ragConfig.embeddingProvider === "openai" ? "https://api.openai.com/v1" : "http://localhost:11434"}
+                        className="w-full text-xs p-2 rounded border border-border bg-background"
+                      />
+                    </div>
+
+                    <div>
                       <label className="text-xs text-muted-foreground block mb-1">Embedding 模型</label>
-                      <select
+                      <input
+                        type="text"
                         value={ragConfig.embeddingModel}
                         onChange={(e) => setRAGConfig({ embeddingModel: e.target.value })}
+                        placeholder="Qwen/Qwen3-Embedding-8B"
                         className="w-full text-xs p-2 rounded border border-border bg-background"
-                      >
-                        {ragConfig.embeddingProvider === "openai" && (
-                          <>
-                            <option value="text-embedding-3-small">text-embedding-3-small</option>
-                            <option value="text-embedding-3-large">text-embedding-3-large</option>
-                            <option value="text-embedding-ada-002">text-embedding-ada-002</option>
-                          </>
-                        )}
-                        {ragConfig.embeddingProvider === "ollama" && (
-                          <>
-                            <option value="nomic-embed-text">nomic-embed-text</option>
-                            <option value="mxbai-embed-large">mxbai-embed-large</option>
-                            <option value="all-minilm">all-minilm</option>
-                          </>
-                        )}
-                      </select>
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">
+                        向量维度
+                        <span className="text-muted-foreground/60 ml-1">(可选)</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={ragConfig.embeddingDimensions || ""}
+                        onChange={(e) => setRAGConfig({ embeddingDimensions: e.target.value ? parseInt(e.target.value) : undefined })}
+                        placeholder="如 1024（留空使用默认）"
+                        className="w-full text-xs p-2 rounded border border-border bg-background"
+                      />
+                    </div>
+
+                    {/* Reranker Settings */}
+                    <div className="border-t border-border pt-3 mt-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium">重排序 (Reranker)</span>
+                        <label className="flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={ragConfig.rerankerEnabled || false}
+                            onChange={(e) => setRAGConfig({ rerankerEnabled: e.target.checked })}
+                            className="w-3 h-3"
+                          />
+                          <span className="text-xs text-muted-foreground">启用</span>
+                        </label>
+                      </div>
+                      
+                      {ragConfig.rerankerEnabled && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-xs text-muted-foreground block mb-1">Reranker Base URL</label>
+                            <input
+                              type="text"
+                              value={ragConfig.rerankerBaseUrl || ""}
+                              onChange={(e) => setRAGConfig({ rerankerBaseUrl: e.target.value })}
+                              placeholder="https://api.siliconflow.cn/v1"
+                              className="w-full text-xs p-2 rounded border border-border bg-background"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-muted-foreground block mb-1">Reranker API Key</label>
+                            <input
+                              type="password"
+                              value={ragConfig.rerankerApiKey || ""}
+                              onChange={(e) => setRAGConfig({ rerankerApiKey: e.target.value })}
+                              placeholder="sk-..."
+                              className="w-full text-xs p-2 rounded border border-border bg-background"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-muted-foreground block mb-1">Reranker 模型</label>
+                            <input
+                              type="text"
+                              value={ragConfig.rerankerModel || ""}
+                              onChange={(e) => setRAGConfig({ rerankerModel: e.target.value })}
+                              placeholder="BAAI/bge-reranker-v2-m3"
+                              className="w-full text-xs p-2 rounded border border-border bg-background"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-muted-foreground block mb-1">返回数量 (Top N)</label>
+                            <input
+                              type="number"
+                              value={ragConfig.rerankerTopN || 5}
+                              onChange={(e) => setRAGConfig({ rerankerTopN: parseInt(e.target.value) || 5 })}
+                              min={1}
+                              max={20}
+                              className="w-full text-xs p-2 rounded border border-border bg-background"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Index Status */}
-                    <div className="bg-muted/50 rounded p-2 space-y-1">
+                    <div className="bg-muted/50 rounded p-2 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">索引状态</span>
                         {ragIsIndexing ? (
@@ -865,11 +942,40 @@ export function RightPanel() {
                           <span className="text-muted-foreground">未初始化</span>
                         )}
                       </div>
-                      {indexStatus && (
+                      
+                      {/* 索引进度条 */}
+                      {ragIsIndexing && indexStatus?.progress && (
+                        <div className="space-y-1">
+                          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                            <div 
+                              className="bg-primary h-full transition-all duration-300"
+                              style={{ 
+                                width: `${Math.round((indexStatus.progress.current / Math.max(indexStatus.progress.total, 1)) * 100)}%` 
+                              }}
+                            />
+                          </div>
+                          <div className="text-xs text-muted-foreground flex justify-between">
+                            <span>
+                              {indexStatus.progress.current} / {indexStatus.progress.total} 文件
+                            </span>
+                            <span>
+                              {Math.round((indexStatus.progress.current / Math.max(indexStatus.progress.total, 1)) * 100)}%
+                            </span>
+                          </div>
+                          {indexStatus.progress.currentFile && (
+                            <div className="text-xs text-muted-foreground truncate" title={indexStatus.progress.currentFile}>
+                              正在处理: {indexStatus.progress.currentFile.split(/[/\\]/).pop()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {!ragIsIndexing && indexStatus && (
                         <div className="text-xs text-muted-foreground">
                           {indexStatus.totalFiles} 个文件, {indexStatus.totalChunks} 个块
                         </div>
                       )}
+                      
                       <button
                         onClick={() => rebuildIndex()}
                         disabled={ragIsIndexing || !ragConfig.embeddingApiKey}

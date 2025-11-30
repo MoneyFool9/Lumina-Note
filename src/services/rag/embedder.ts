@@ -67,6 +67,7 @@ export class Embedder {
       body: JSON.stringify({
         model: this.config.embeddingModel,
         input: text,
+        ...(this.config.embeddingDimensions && { dimensions: this.config.embeddingDimensions }),
       }),
     });
 
@@ -115,6 +116,7 @@ export class Embedder {
         body: JSON.stringify({
           model: this.config.embeddingModel,
           input: batch,
+          ...(this.config.embeddingDimensions && { dimensions: this.config.embeddingDimensions }),
         }),
       });
 

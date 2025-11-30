@@ -14,13 +14,32 @@ export const ReadNoteTool: ToolExecutor = {
     params: Record<string, unknown>,
     context: ToolContext
   ): Promise<ToolResult> {
-    const paths = params.paths as string[];
+    // 支持两种格式：path (单个字符串) 或 paths (数组)
+    let paths: string[] = [];
+    
+    if (params.paths) {
+      // paths 参数
+      if (Array.isArray(params.paths)) {
+        paths = params.paths as string[];
+      } else if (typeof params.paths === "string") {
+        // 可能是 JSON 字符串或单个路径
+        try {
+          const parsed = JSON.parse(params.paths as string);
+          paths = Array.isArray(parsed) ? parsed : [params.paths as string];
+        } catch {
+          paths = [params.paths as string];
+        }
+      }
+    } else if (params.path) {
+      // path 参数（单个）
+      paths = [params.path as string];
+    }
 
-    if (!Array.isArray(paths) || paths.length === 0) {
+    if (paths.length === 0) {
       return {
         success: false,
         content: "",
-        error: "参数错误: paths 必须是非空数组",
+        error: "参数错误: 请提供 path 或 paths 参数",
       };
     }
 

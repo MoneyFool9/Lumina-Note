@@ -4,6 +4,7 @@
 
 export * from "./types";
 export { Embedder } from "./embedder";
+export { Reranker } from "./reranker";
 export { MarkdownChunker } from "./chunker";
 export { VectorStore } from "./vectorStore";
 export { RAGManager } from "./manager";

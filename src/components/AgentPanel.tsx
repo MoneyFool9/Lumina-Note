@@ -205,6 +205,12 @@ export function AgentPanel() {
 
 // 聚合并渲染所有消息
 function renderMessages(messages: Message[]) {
+  // 检测任务是否完成（最后有 attempt_completion 的结果）
+  const isTaskComplete = messages.some(m => 
+    m.content.includes("<tool_result") && 
+    m.content.includes("attempt_completion")
+  );
+  
   // 收集所有工具调用和结果
   const toolResults = new Map<string, { result: string; success: boolean }>();
   
@@ -314,6 +320,7 @@ function renderMessages(messages: Message[]) {
               params={tool.params}
               result={tool.result}
               success={tool.success}
+              isTaskComplete={isTaskComplete}
             />
           ))}
           {text && (
@@ -410,7 +417,7 @@ function getToolSummary(name: string, result?: string): string {
     const lines = result.split("\n").length;
     return `读取了 ${lines} 行内容`;
   }
-  if (name === "write_note" || name === "edit_note") {
+  if (name === "create_note" || name === "edit_note") {
     return "文件已修改";
   }
   if (name === "attempt_completion") {
@@ -426,16 +433,29 @@ function ToolCallCard({
   name, 
   params, 
   result, 
-  success 
+  success,
+  isTaskComplete 
 }: { 
   name: string; 
   params: string; 
   result?: string; 
   success?: boolean;
+  isTaskComplete?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isComplete = result !== undefined;
   const summary = getToolSummary(name, result);
+  
+  // 任务完成后自动折叠
+  useEffect(() => {
+    if (isTaskComplete && expanded) {
+      // 延迟一下，让用户看到动画
+      const timer = setTimeout(() => {
+        setExpanded(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isTaskComplete, expanded]);
 
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-muted/30">
@@ -471,9 +491,13 @@ function ToolCallCard({
         />
       </button>
       
-      {/* 展开的详情 */}
-      {expanded && (
-        <div className="border-t border-border px-3 py-2 bg-muted/20">
+      {/* 展开的详情 - 带动画 */}
+      <div 
+        className={`border-t border-border bg-muted/20 overflow-hidden transition-all duration-300 ease-in-out ${
+          expanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 border-t-0'
+        }`}
+      >
+        <div className="px-3 py-2">
           {params && (
             <div className="mb-2">
               <div className="text-xs text-muted-foreground mb-1">参数:</div>
@@ -491,7 +515,7 @@ function ToolCallCard({
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

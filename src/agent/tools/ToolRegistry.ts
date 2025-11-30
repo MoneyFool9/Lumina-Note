@@ -9,11 +9,18 @@ import { ToolExecutor, ToolResult, ToolContext } from "../types";
 // 导入工具执行器
 import { ReadNoteTool } from "./executors/ReadNoteTool";
 import { EditNoteTool } from "./executors/EditNoteTool";
-import { WriteNoteTool } from "./executors/WriteNoteTool";
+import { CreateNoteTool } from "./executors/CreateNoteTool";
 import { ListNotesTool } from "./executors/ListNotesTool";
 import { MoveNoteTool } from "./executors/MoveNoteTool";
 import { SearchNotesTool } from "./executors/SearchNotesTool";
 import { AttemptCompletionTool } from "./executors/AttemptCompletionTool";
+import { DeleteNoteTool } from "./executors/DeleteNoteTool";
+import { GrepSearchTool } from "./executors/GrepSearchTool";
+import { SemanticSearchTool } from "./executors/SemanticSearchTool";
+import { QueryDatabaseTool } from "./executors/QueryDatabaseTool";
+import { AddDatabaseRowTool } from "./executors/AddDatabaseRowTool";
+import { GetBacklinksTool } from "./executors/GetBacklinksTool";
+import { AskUserTool } from "./executors/AskUserTool";
 
 export class ToolRegistry {
   private tools: Map<string, ToolExecutor> = new Map();
@@ -26,12 +33,28 @@ export class ToolRegistry {
    * 注册默认工具
    */
   private registerDefaultTools(): void {
+    // 基础笔记操作
     this.register(ReadNoteTool);
     this.register(EditNoteTool);
-    this.register(WriteNoteTool);
+    this.register(CreateNoteTool);
     this.register(ListNotesTool);
     this.register(MoveNoteTool);
+    this.register(DeleteNoteTool);
+    
+    // 搜索工具
     this.register(SearchNotesTool);
+    this.register(GrepSearchTool);
+    this.register(SemanticSearchTool);
+    
+    // 数据库工具
+    this.register(QueryDatabaseTool);
+    this.register(AddDatabaseRowTool);
+    
+    // 知识图谱工具
+    this.register(GetBacklinksTool);
+    
+    // 交互工具
+    this.register(AskUserTool);
     this.register(AttemptCompletionTool);
   }
 

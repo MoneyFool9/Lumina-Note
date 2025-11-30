@@ -1,13 +1,14 @@
 /**
- * write_note 工具执行器
+ * create_note 工具执行器
+ * 创建新的笔记文件
  */
 
 import { ToolExecutor, ToolResult, ToolContext } from "../../types";
 import { writeFile, exists, createDir } from "@/lib/tauri";
 import { join, dirname } from "@/lib/path";
 
-export const WriteNoteTool: ToolExecutor = {
-  name: "write_note",
+export const CreateNoteTool: ToolExecutor = {
+  name: "create_note",
   requiresApproval: true, // 写操作，需要审批
 
   async execute(
@@ -57,7 +58,7 @@ export const WriteNoteTool: ToolExecutor = {
       return {
         success: false,
         content: "",
-        error: `写入文件失败: ${error instanceof Error ? error.message : "未知错误"}`,
+        error: `创建文件失败: ${error instanceof Error ? error.message : "未知错误"}`,
       };
     }
   },

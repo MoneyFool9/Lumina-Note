@@ -25,6 +25,27 @@ function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// 将名称转换为安全的文件名/ID
+function slugify(name: string): string {
+  return name
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '-')  // 替换 Windows 非法字符
+    .replace(/\s+/g, '-')           // 空格转连字符
+    .replace(/-+/g, '-')            // 多个连字符合并
+    .replace(/^-|-$/g, '');         // 移除首尾连字符
+}
+
+// 确保文件名唯一（如果已存在则添加数字后缀）
+async function ensureUniquePath(basePath: string, ext: string): Promise<string> {
+  let path = `${basePath}${ext}`;
+  let counter = 1;
+  while (await exists(path)) {
+    path = `${basePath}-${counter}${ext}`;
+    counter++;
+  }
+  return path;
+}
+
 function getDbDir(): string {
   const vaultPath = useFileStore.getState().vaultPath;
   if (!vaultPath) throw new Error("No vault path set");
@@ -282,7 +303,23 @@ export const useDatabaseStore = create<DatabaseState>()(
       
       // ===== 数据库操作 =====
       createDatabase: async (options: CreateDatabaseOptions) => {
-        const dbId = generateId();
+        // 使用数据库名称生成 ID（更有意义）
+        const baseId = slugify(options.name) || generateId();
+        const dbDir = getDbDir();
+        
+        // 确保目录存在
+        const dirExists = await exists(dbDir);
+        if (!dirExists) {
+          await createDir(dbDir);
+        }
+        
+        // 确保 ID 唯一
+        let dbId = baseId;
+        let counter = 1;
+        while (await exists(`${dbDir}/${dbId}.db.json`)) {
+          dbId = `${baseId}-${counter}`;
+          counter++;
+        }
         const template = options.template ? DATABASE_TEMPLATES[options.template] : DATABASE_TEMPLATES.blank;
         const now = new Date().toISOString();
         
@@ -449,9 +486,32 @@ export const useDatabaseStore = create<DatabaseState>()(
         if (!db) throw new Error("Database not found");
         
         const now = new Date().toISOString();
-        const noteId = generateId();
-        const noteName = `${db.name}-${noteId}`;
-        const notePath = `${vaultPath}/${noteName}.md`;
+        
+        // 查找标题列（支持 "标题", "书名", "title", "name" 等常见列名）
+        const titleColumnNames = ['标题', '书名', '名称', 'title', 'name'];
+        const titleColumn = db.columns.find(c => 
+          titleColumnNames.includes(c.name.toLowerCase()) || 
+          titleColumnNames.includes(c.name)
+        );
+        
+        // 获取标题值：优先从 cells 中获取，否则用默认名
+        let titleValue = '';
+        if (titleColumn && cells) {
+          // cells 可能用列名或列 ID 作为 key
+          titleValue = String(cells[titleColumn.id] || cells[titleColumn.name] || '');
+        }
+        
+        // 如果没有标题，用数据库名 + 日期时间
+        if (!titleValue) {
+          const dateStr = new Date().toISOString().slice(0, 10);
+          titleValue = `${db.name}-${dateStr}`;
+        }
+        
+        // 生成安全的文件名
+        const safeFileName = slugify(titleValue) || generateId();
+        const basePath = `${vaultPath}/${safeFileName}`;
+        const notePath = await ensureUniquePath(basePath, '.md');
+        const noteName = notePath.split('/').pop()?.replace('.md', '') || safeFileName;
         
         // 构建列 ID 到列名的映射
         const idToName = new Map<string, string>();
@@ -459,16 +519,13 @@ export const useDatabaseStore = create<DatabaseState>()(
           idToName.set(col.id, col.name);
         }
         
-        // 获取标题列的值
-        const titleColumnId = db.columns.find(c => c.name.toLowerCase() === 'title' || c.name === '标题')?.id;
-        const titleValue = titleColumnId && cells?.[titleColumnId] 
-          ? String(cells[titleColumnId]) 
-          : noteName;
+        // 最终标题值（用于 frontmatter）
+        const finalTitle = titleValue || noteName;
         
         // 构建 YAML 内容（使用列名）
         const yamlLines = [
           `db: ${dbId}`,
-          `title: ${titleValue}`,
+          `title: ${finalTitle}`,
           `createdAt: ${now}`,
           `updatedAt: ${now}`,
         ];
@@ -487,7 +544,7 @@ export const useDatabaseStore = create<DatabaseState>()(
 ${yamlLines.join('\n')}
 ---
 
-# ${titleValue}
+# ${finalTitle}
 
 `;
         
@@ -497,7 +554,7 @@ ${yamlLines.join('\n')}
         const newRow: DatabaseRow = {
           id: notePath,
           notePath,
-          noteTitle: titleValue,
+          noteTitle: finalTitle,
           cells: cells || {},
           createdAt: now,
           updatedAt: now,

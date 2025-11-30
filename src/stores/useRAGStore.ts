@@ -5,11 +5,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { RAGManager, RAGConfig, DEFAULT_RAG_CONFIG, IndexStatus, SearchResult } from "@/services/rag";
+import { encryptApiKey, decryptApiKey } from "@/lib/crypto";
 
 interface RAGState {
   // 配置
   config: RAGConfig;
-  setConfig: (config: Partial<RAGConfig>) => void;
+  setConfig: (config: Partial<RAGConfig>) => void | Promise<void>;
 
   // 管理器实例
   ragManager: RAGManager | null;
@@ -32,15 +33,31 @@ export const useRAGStore = create<RAGState>()(
     (set, get) => ({
       // 配置
       config: DEFAULT_RAG_CONFIG,
-      setConfig: (newConfig) => {
-        const config = { ...get().config, ...newConfig };
-        set({ config });
+      setConfig: async (newConfig) => {
+        const currentConfig = get().config;
+        const memoryConfig = { ...currentConfig, ...newConfig };
+        const storageConfig = { ...currentConfig, ...newConfig };
         
-        // 更新管理器配置
+        // 加密 Embedding API Key
+        if (newConfig.embeddingApiKey !== undefined) {
+          storageConfig.embeddingApiKey = await encryptApiKey(newConfig.embeddingApiKey);
+        }
+        
+        // 加密 Reranker API Key
+        if (newConfig.rerankerApiKey !== undefined) {
+          storageConfig.rerankerApiKey = await encryptApiKey(newConfig.rerankerApiKey);
+        }
+        
+        // 更新管理器配置（明文）
         const ragManager = get().ragManager;
         if (ragManager) {
-          ragManager.updateConfig(config);
+          ragManager.updateConfig(memoryConfig);
         }
+        
+        // 存储加密后的配置
+        set({ config: storageConfig });
+        // 立即恢复内存中的明文（避免 UI 显示加密值）
+        setTimeout(() => set({ config: memoryConfig }), 0);
       },
 
       // 管理器
@@ -160,6 +177,24 @@ export const useRAGStore = create<RAGState>()(
       partialize: (state) => ({
         config: state.config,
       }),
+      // 恢复数据后解密 API Keys（复用 useAIStore 模式）
+      onRehydrateStorage: () => async (state) => {
+        if (state?.config) {
+          const decryptedConfig = { ...state.config };
+          
+          // 解密 Embedding API Key
+          if (state.config.embeddingApiKey) {
+            decryptedConfig.embeddingApiKey = await decryptApiKey(state.config.embeddingApiKey);
+          }
+          
+          // 解密 Reranker API Key
+          if (state.config.rerankerApiKey) {
+            decryptedConfig.rerankerApiKey = await decryptApiKey(state.config.rerankerApiKey);
+          }
+          
+          useRAGStore.setState({ config: decryptedConfig });
+        }
+      },
     }
   )
 );

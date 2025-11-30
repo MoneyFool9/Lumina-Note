@@ -84,7 +84,7 @@ TOOL USE
 
 示例 - 读取笔记:
 <read_note>
-<paths>["notes/daily/2024-01-15.md"]</paths>
+<path>notes/daily/2024-01-15.md</path>
 </read_note>
 
 示例 - 编辑笔记:
@@ -95,16 +95,26 @@ TOOL USE
 
 # 重要规则
 
-1. 请始终使用实际的工具名称作为 XML 标签名
-2. 参数值如果是数组或对象，使用 JSON 格式
-3. 每次工具调用后等待结果，再决定下一步
-4. 完成任务后必须使用 attempt_completion 工具`;
+1. **只能使用下方 TOOLS 部分列出的工具**，禁止发明或猜测工具名
+2. 工具名必须完全匹配（如 read_note，不是 read_file 或 get_note）
+3. 参数值如果是数组或对象，使用 JSON 格式
+4. 每次工具调用后等待结果，再决定下一步
+5. 完成任务后必须使用 attempt_completion 工具
+
+# 常见错误工具名（禁止使用）
+
+- append_to_note → 使用 edit_note
+- create_file → 使用 create_note
+- read_file → 使用 read_note
+- write_file → 使用 create_note 或 edit_note`;
   }
 
   private getToolsCatalog(): string {
     return `====
 
 TOOLS
+
+以下是你**唯一可以使用**的工具列表。不要使用未列出的工具名。
 
 ${this.tools.map((tool) => tool.definition).join("\n\n")}`;
   }
@@ -135,14 +145,26 @@ RULES
 
 1. 笔记库根目录是: ${context.workspacePath}
 2. 所有文件路径必须相对于此目录
-3. 修改文件前必须先读取确认当前内容
+3. 修改文件前必须先用 read_note 读取确认当前内容
 4. 不要询问不必要的信息，直接根据上下文行动
 5. 你的目标是完成任务，而不是进行对话
 6. 完成任务后必须使用 attempt_completion 工具
 7. 禁止以 "好的"、"当然"、"没问题" 等寒暄开头
 8. 每次工具调用后必须等待结果确认
 9. 如果遇到错误，尝试其他方法而不是放弃
-10. 保持输出简洁，避免冗长解释`;
+10. 保持输出简洁，避免冗长解释
+
+# 编辑 vs 创建文件
+
+- **修改现有文件**：必须使用 edit_note，使用精确的 search/replace
+  - 先 read_note 获取当前内容
+  - search 必须与原文完全匹配（从 read_note 结果中复制）
+  - 只替换需要修改的部分
+  
+- **创建新文件**：使用 create_note
+  - 仅用于创建不存在的文件
+  
+- **禁止**：用 create_note 覆盖已存在的文件（会丢失未修改的内容）`;
   }
 
   private getContextSection(context: TaskContext): string {
