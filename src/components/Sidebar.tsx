@@ -14,7 +14,6 @@ import {
   RefreshCw,
   MoreHorizontal,
   Calendar,
-  BrainCircuit,
   Sun,
   Moon,
   FilePlus,
@@ -444,10 +443,6 @@ export function Sidebar() {
               <Moon size={14} />
             )}
           </button>
-        </div>
-        <div className="flex items-center gap-2 opacity-70">
-          <BrainCircuit size={12} />
-          <span>模型: Claude 3.5 Sonnet</span>
         </div>
       </div>
     </aside>
