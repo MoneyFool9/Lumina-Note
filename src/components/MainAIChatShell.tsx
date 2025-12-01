@@ -7,6 +7,7 @@ import { useFileStore } from "@/stores/useFileStore";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { processMessageWithFiles } from "@/hooks/useChatSend";
 import { parseMarkdown } from "@/lib/markdown";
+import { join } from "@/lib/path";
 import {
   ArrowUp,
   Bot,
@@ -23,6 +24,11 @@ import {
   Mic,
   MicOff,
   Folder,
+  ChevronDown,
+  ChevronRight,
+  Wrench,
+  AlertCircle,
+  Check,
 } from "lucide-react";
 import type { ReferencedFile } from "@/hooks/useChatSend";
 
@@ -79,6 +85,8 @@ export function MainAIChatShell() {
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [filePickerQuery, setFilePickerQuery] = useState("");
   const [referencedFiles, setReferencedFiles] = useState<ReferencedFile[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
@@ -96,6 +104,9 @@ export function MainAIChatShell() {
     createSession: createAgentSession,
     switchSession: switchAgentSession,
     deleteSession: deleteAgentSession,
+    pendingTool,
+    approve,
+    reject,
     startTask,
     abort: agentAbort,
   } = useAgentStore();
@@ -121,7 +132,7 @@ export function MainAIChatShell() {
   const switchSession = chatMode === "agent" ? switchAgentSession : switchChatSession;
   const deleteSession = chatMode === "agent" ? deleteAgentSession : deleteChatSession;
   
-  const { vaultPath, currentFile, currentContent, fileTree } = useFileStore();
+  const { vaultPath, currentFile, currentContent, fileTree, openFile } = useFileStore();
   
   const { isRecording, interimText, toggleRecording } = useSpeechToText((text: string) => {
     setInput((prev) => (prev ? prev + " " + text : text));
@@ -240,13 +251,81 @@ export function MainAIChatShell() {
   };
 
 
+  // 判断是否是 Agent 中间步骤（工具调用中的消息）
+  const isIntermediateStep = (content: string, role: string): boolean => {
+    if (chatMode !== "agent" || role !== "assistant") return false;
+    
+    // 包含工具调用标签的是中间步骤
+    const toolTags = ["read_note", "edit_note", "create_note", "list_notes", "move_note", 
+                      "delete_note", "search_notes", "grep_search", "semantic_search", 
+                      "query_database", "add_database_row", "get_backlinks", "ask_user"];
+    
+    for (const tag of toolTags) {
+      if (content.includes(`<${tag}>`)) return true;
+    }
+    
+    return false;
+  };
+
+  // 提取工具调用摘要
+  const extractToolSummary = (content: string): string => {
+    const toolMatches: string[] = [];
+    
+    // 匹配工具调用
+    const toolRegex = /<(read_note|edit_note|create_note|list_notes|search_notes|grep_search|semantic_search)>/g;
+    let match;
+    while ((match = toolRegex.exec(content)) !== null) {
+      const toolName = match[1];
+      const nameMap: Record<string, string> = {
+        read_note: "读取笔记",
+        edit_note: "编辑笔记", 
+        create_note: "创建笔记",
+        list_notes: "列出文件",
+        search_notes: "搜索笔记",
+        grep_search: "文本搜索",
+        semantic_search: "语义搜索",
+      };
+      toolMatches.push(nameMap[toolName] || toolName);
+    }
+    
+    if (toolMatches.length === 0) return "执行操作";
+    if (toolMatches.length === 1) return toolMatches[0];
+    return `${toolMatches[0]} 等 ${toolMatches.length} 个操作`;
+  };
+
+  // 从消息历史中提取创建/编辑的文件
+  const extractCreatedFiles = useCallback((): string[] => {
+    if (chatMode !== "agent") return [];
+    
+    const files: string[] = [];
+    for (const msg of messages) {
+      if (msg.role === "user" && msg.content.includes("<tool_result")) {
+        // 匹配 create_note 的结果: "已创建文件: xxx.md" 或 "已覆盖文件: xxx.md"
+        const createMatch = msg.content.match(/<tool_result name="create_note">\s*已(?:创建|覆盖)文件: ([^\n<]+)/);
+        if (createMatch) {
+          files.push(createMatch[1].trim());
+        }
+        // 匹配 edit_note 的结果: "文件: xxx.md\n已生成 N 处修改"
+        const editMatch = msg.content.match(/<tool_result name="edit_note">\s*文件: ([^\n<]+)/);
+        if (editMatch) {
+          files.push(editMatch[1].trim());
+        }
+      }
+    }
+    return [...new Set(files)]; // 去重
+  }, [messages, chatMode]);
+
   // 清理消息内容（移除 XML 标签等）- 参考 AgentPanel 的 renderMessages 逻辑
   const cleanContent = (content: string, isUser: boolean): string => {
     if (chatMode === "agent") {
-      // 跳过工具结果消息（这些是系统消息，不需要显示）
+      // 跳过工具结果消息和系统提示（这些是给 AI 看的，不需要显示给用户）
       if (content.includes("<tool_result") || 
           content.includes("<tool_error") ||
-          content.includes("你的响应没有包含有效的工具调用")) {
+          content.includes("你的响应没有包含有效的工具调用") ||
+          content.includes("请使用 <thinking> 标签分析错误原因") ||
+          content.includes("系统错误:") ||
+          content.includes("系统拒绝执行") ||
+          content.includes("用户拒绝了工具调用")) {
         return "";
       }
       
@@ -432,42 +511,221 @@ export function MainAIChatShell() {
         {hasStarted && (
           <div className="flex-1 w-full overflow-y-auto scrollbar-thin">
             <div className="max-w-3xl mx-auto px-4 pt-8">
-            {messages.map((msg, idx) => {
-              const isUser = msg.role === "user";
-              const content = cleanContent(msg.content || "", isUser);
+            {(() => {
+              // 将消息分组：连续的中间步骤合并为一组
+              const groups: { type: "normal" | "steps"; messages: typeof messages; startIdx: number }[] = [];
+              const isAgentCompleted = chatMode === "agent" && agentStatus !== "running";
               
-              if (!content.trim()) return null;
+              // 如果 Agent 已完成，把所有中间步骤合并为一个组
+              if (isAgentCompleted) {
+                let allSteps: typeof messages = [];
+                let firstStepIdx = -1;
+                
+                messages.forEach((msg, idx) => {
+                  const isStep = isIntermediateStep(msg.content || "", msg.role);
+                  
+                  if (isStep) {
+                    if (firstStepIdx === -1) firstStepIdx = idx;
+                    allSteps.push(msg);
+                  } else {
+                    // 在遇到第一条普通消息前，先把之前的步骤加入
+                    if (allSteps.length > 0 && firstStepIdx !== -1) {
+                      groups.push({ type: "steps", messages: [...allSteps], startIdx: firstStepIdx });
+                      allSteps = [];
+                      firstStepIdx = -1;
+                    }
+                    groups.push({ type: "normal", messages: [msg], startIdx: idx });
+                  }
+                });
+                
+                // 处理末尾的中间步骤
+                if (allSteps.length > 0 && firstStepIdx !== -1) {
+                  groups.push({ type: "steps", messages: allSteps, startIdx: firstStepIdx });
+                }
+              } else {
+                // Agent 运行中，每个工具调用单独显示（保持实时反馈）
+                let currentSteps: typeof messages = [];
+                let stepStartIdx = 0;
+                
+                messages.forEach((msg, idx) => {
+                  const isStep = isIntermediateStep(msg.content || "", msg.role);
+                  
+                  if (isStep) {
+                    if (currentSteps.length === 0) stepStartIdx = idx;
+                    currentSteps.push(msg);
+                  } else {
+                    if (currentSteps.length > 0) {
+                      groups.push({ type: "steps", messages: [...currentSteps], startIdx: stepStartIdx });
+                      currentSteps = [];
+                    }
+                    groups.push({ type: "normal", messages: [msg], startIdx: idx });
+                  }
+                });
+                
+                if (currentSteps.length > 0) {
+                  groups.push({ type: "steps", messages: currentSteps, startIdx: stepStartIdx });
+                }
+              }
+              
+              return groups.map((group) => {
+                if (group.type === "steps") {
+                  // 折叠的中间步骤组
+                  const isExpanded = expandedSteps.has(group.startIdx);
+                  const summaries = group.messages.map(m => extractToolSummary(m.content || ""));
+                  const uniqueSummaries = [...new Set(summaries)];
+                  
+                  return (
+                    <motion.div
+                      key={`steps-${group.startIdx}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="mb-4"
+                    >
+                      <button
+                        onClick={() => {
+                          setExpandedSteps(prev => {
+                            const next = new Set(prev);
+                            if (next.has(group.startIdx)) {
+                              next.delete(group.startIdx);
+                            } else {
+                              next.add(group.startIdx);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        <Wrench size={12} />
+                        <span>
+                          {group.messages.length} 个步骤: {uniqueSummaries.slice(0, 2).join(", ")}
+                          {uniqueSummaries.length > 2 && "..."}
+                        </span>
+                      </button>
+                      
+                      {isExpanded && (
+                        <div className="mt-2 pl-4 border-l-2 border-muted space-y-2">
+                          {group.messages.map((msg, i) => {
+                            const content = cleanContent(msg.content || "", false);
+                            if (!content.trim()) return null;
+                            return (
+                              <div key={i} className="text-sm text-muted-foreground">
+                                {content}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                }
+                
+                // 普通消息
+                const msg = group.messages[0];
+                const isUser = msg.role === "user";
+                const content = cleanContent(msg.content || "", isUser);
+                
+                if (!content.trim()) return null;
+                
+                return (
+                  <motion.div 
+                    key={group.startIdx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`mb-6 flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+                  >
+                    {!isUser && (
+                      <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shrink-0">
+                        <Bot size={16} className="text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className={`max-w-[80%] ${
+                      isUser 
+                        ? "bg-muted text-foreground rounded-2xl rounded-tr-sm px-4 py-2.5" 
+                        : "text-foreground"
+                    }`}>
+                      {isUser ? (
+                        <span className="text-sm">{content}</span>
+                      ) : (
+                        <div 
+                          className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+                        />
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              });
+            })()}
+
+            {/* 创建/编辑的文件链接 */}
+            {chatMode === "agent" && agentStatus !== "running" && (() => {
+              const createdFiles = extractCreatedFiles();
+              if (createdFiles.length === 0) return null;
               
               return (
-                <motion.div 
-                  key={idx}
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`mb-6 flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
+                  className="mb-6 flex gap-3"
                 >
-                  {!isUser && (
-                    <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shrink-0">
-                      <Bot size={16} className="text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className={`max-w-[80%] ${
-                    isUser 
-                      ? "bg-muted text-foreground rounded-2xl rounded-tr-sm px-4 py-2.5" 
-                      : "text-foreground"
-                  }`}>
-                    {isUser ? (
-                      <span className="text-sm">{content}</span>
-                    ) : (
-                      <div 
-                        className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
-                      />
-                    )}
+                  <div className="w-8 h-8 shrink-0" /> {/* 占位，对齐 Bot 头像 */}
+                  <div className="flex flex-wrap gap-2">
+                    {createdFiles.map((file) => (
+                      <button
+                        key={file}
+                        onClick={() => openFile(join(vaultPath || "", file))}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-sm transition-colors border border-primary/20"
+                      >
+                        <FileText size={14} />
+                        <span>{file}</span>
+                      </button>
+                    ))}
                   </div>
                 </motion.div>
               );
-            })}
+            })()}
             
+            {/* 工具审批 */}
+            {chatMode === "agent" && pendingTool && agentStatus === "waiting_approval" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 max-w-[80%]"
+              >
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="font-medium text-sm">需要审批</span>
+                  </div>
+                  <div className="text-sm text-foreground mb-3">
+                    <p className="mb-1">
+                      工具: <code className="px-1.5 py-0.5 bg-muted rounded text-xs">{pendingTool.name}</code>
+                    </p>
+                    <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-32">
+                      {JSON.stringify(pendingTool.params, null, 2)}
+                    </pre>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={approve}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
+                    >
+                      <Check className="w-3 h-3" />
+                      批准
+                    </button>
+                    <button
+                      onClick={reject}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground text-sm rounded-lg transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      拒绝
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {/* 打字指示器 */}
             {isLoading && (
               <motion.div 
@@ -727,6 +985,73 @@ export function MainAIChatShell() {
           )}
           </AnimatePresence>
         </main>
+
+        {/* 调试按钮 */}
+        <button
+          onClick={() => setShowDebug(!showDebug)}
+          className="fixed bottom-4 right-4 z-50 w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg hover:bg-orange-600 transition-colors text-xs font-bold"
+          title="调试面板"
+        >
+          🐛
+        </button>
+
+        {/* 调试面板 */}
+        {showDebug && (
+          <div className="fixed inset-4 z-50 bg-background/95 backdrop-blur border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
+              <h2 className="font-bold text-lg">🐛 Agent 调试面板</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  模式: {chatMode} | 状态: {agentStatus} | 消息数: {agentMessages.length}
+                </span>
+                <button
+                  onClick={() => setShowDebug(false)}
+                  className="p-1 hover:bg-muted rounded"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4 font-mono text-xs space-y-4">
+              {agentMessages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-lg border ${
+                    msg.role === "system"
+                      ? "bg-purple-500/10 border-purple-500/30"
+                      : msg.role === "user"
+                      ? "bg-blue-500/10 border-blue-500/30"
+                      : "bg-green-500/10 border-green-500/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2 font-bold">
+                    <span className={`px-2 py-0.5 rounded text-[10px] ${
+                      msg.role === "system"
+                        ? "bg-purple-500 text-white"
+                        : msg.role === "user"
+                        ? "bg-blue-500 text-white"
+                        : "bg-green-500 text-white"
+                    }`}>
+                      {msg.role.toUpperCase()}
+                    </span>
+                    <span className="text-muted-foreground">#{idx}</span>
+                    <span className="text-muted-foreground">
+                      {msg.content.length} chars
+                    </span>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all text-foreground/90 max-h-[400px] overflow-auto">
+                    {msg.content}
+                  </pre>
+                </div>
+              ))}
+              {agentMessages.length === 0 && (
+                <div className="text-center text-muted-foreground py-8">
+                  暂无消息，发送一条消息开始调试
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
