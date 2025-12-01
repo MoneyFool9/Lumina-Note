@@ -155,69 +155,7 @@ prompt = "<image>\n<|grounding|>Convert the document to markdown."
 res = model.infer(tokenizer, prompt=prompt, image_file=image_path)
 ```
 
-### 2.3 DeepSeek-OCR Grounding 输出解析
-
-DeepSeek-OCR 的 grounding 输出需要解析，提取 bbox 坐标：
-
-#### 输出示例
-
-```markdown
-<box>100,200,400,500</box>
-
-## 标题
-
-这是正文内容...
-
-<box>50,600,550,800</box>
-
-| 列A | 列B |
-|-----|-----|
-| 1   | 2   |
-
-<box>200,850,400,900</box>
-
-$$E = mc^2$$
-```
-
-#### 解析逻辑
-
-```typescript
-interface ParsedElement {
-  type: 'text' | 'image' | 'table' | 'equation';
-  bbox: [number, number, number, number];
-  content: string;
-}
-
-function parseGroundingOutput(output: string): ParsedElement[] {
-  const elements: ParsedElement[] = [];
-  const boxRegex = /<box>(\d+),(\d+),(\d+),(\d+)<\/box>\s*([\s\S]*?)(?=<box>|$)/g;
-  
-  let match;
-  while ((match = boxRegex.exec(output)) !== null) {
-    const bbox: [number, number, number, number] = [
-      parseInt(match[1]), parseInt(match[2]),
-      parseInt(match[3]), parseInt(match[4])
-    ];
-    const content = match[5].trim();
-    
-    // 根据内容判断类型
-    let type: ParsedElement['type'] = 'text';
-    if (content.startsWith('|') && content.includes('|')) {
-      type = 'table';
-    } else if (content.startsWith('$$') || content.includes('\\frac')) {
-      type = 'equation';
-    } else if (content.startsWith('![') || content.includes('<img')) {
-      type = 'image';
-    }
-    
-    elements.push({ type, bbox, content });
-  }
-  
-  return elements;
-}
-```
-
-### 2.4 轻量备选：PP-Structure
+### 2.3 轻量备选：PP-Structure
 
 [PP-Structure](https://github.com/PaddlePaddle/PaddleOCR/tree/main/ppstructure) 是 PaddleOCR 的文档分析模块。
 
@@ -250,7 +188,7 @@ function parseGroundingOutput(output: string): ParsedElement[] {
 }
 ```
 
-### 2.5 其他参考项目
+### 2.4 其他参考项目
 
 | 项目 | 特点 | 是否考虑 |
 |------|------|---------|
@@ -258,48 +196,7 @@ function parseGroundingOutput(output: string): ParsedElement[] {
 | GOT-OCR | 端到端 OCR | 待评估 |
 | Nougat | Meta 出品，学术 PDF 转 LaTeX | 特定场景 |
 
-### 2.6 PDF 转图片（OCR 输入预处理）
-
-DeepSeek-OCR 接收图片输入，需要先将 PDF 页面渲染为图片：
-
-```typescript
-// 前端：使用 pdf.js 渲染 PDF 页面为图片
-async function renderPDFPageToImage(
-  pdfDoc: PDFDocumentProxy,
-  pageNum: number,
-  scale: number = 2  // 2x 提高清晰度
-): Promise<Blob> {
-  const page = await pdfDoc.getPage(pageNum);
-  const viewport = page.getViewport({ scale });
-  
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  
-  const ctx = canvas.getContext('2d')!;
-  await page.render({ canvasContext: ctx, viewport }).promise;
-  
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob!), 'image/png');
-  });
-}
-
-// 批量渲染所有页面
-async function renderAllPages(pdfPath: string): Promise<string[]> {
-  const pdfDoc = await pdfjsLib.getDocument(pdfPath).promise;
-  const imagePaths: string[] = [];
-  
-  for (let i = 1; i <= pdfDoc.numPages; i++) {
-    const blob = await renderPDFPageToImage(pdfDoc, i);
-    const path = await saveToCache(blob, `page_${i - 1}.png`);
-    imagePaths.push(path);
-  }
-  
-  return imagePaths;
-}
-```
-
-### 2.7 推荐策略
+### 2.5 推荐策略
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -638,33 +535,15 @@ async function sendToAI(message: string, references: PDFElement[]) {
 PDF 缓存目录结构：
 ~/.lumina-note/pdf-cache/
 ├── {pdf-hash}/
-│   ├── structure.json     # 解析后的结构化数据（bbox + 内容）
-│   ├── raw_output.md      # DeepSeek-OCR 原始输出
+│   ├── structure.json     # 结构化数据
 │   ├── images/            # 提取的图片
 │   │   ├── page_0_img_0.png
+│   │   ├── page_0_img_1.png
 │   │   └── ...
-│   ├── pages/             # 每页渲染的图片（用于 OCR 输入）
-│   │   ├── page_0.png
-│   │   └── ...
-│   └── metadata.json      # 缓存元数据
+│   └── metadata.json      # 缓存元数据（时间、版本等）
 ```
 
-### 6.2 metadata.json 结构
-
-```json
-{
-  "pdf_path": "/path/to/document.pdf",
-  "pdf_hash": "abc123...",
-  "pdf_mtime": 1701388800,
-  "parse_time": 1701388900,
-  "backend": "deepseek-ocr",
-  "backend_version": "1.0.0",
-  "page_count": 10,
-  "resolution": "base"
-}
-```
-
-### 6.3 缓存策略
+### 6.2 缓存策略
 
 ```rust
 fn get_cached_structure(pdf_path: &str) -> Option<PDFStructure> {
@@ -687,68 +566,9 @@ fn get_cached_structure(pdf_path: &str) -> Option<PDFStructure> {
 }
 ```
 
-### 6.4 缓存清理
-
-```rust
-// 定期清理过期缓存（超过 30 天未访问）
-fn cleanup_old_cache() {
-    let cache_root = get_cache_root();
-    for entry in fs::read_dir(cache_root)? {
-        let metadata_path = entry.path().join("metadata.json");
-        if let Ok(metadata) = read_metadata(&metadata_path) {
-            let age = now() - metadata.last_access;
-            if age > Duration::days(30) {
-                fs::remove_dir_all(entry.path())?;
-            }
-        }
-    }
-}
-```
-
 ---
 
-## 七、整体架构
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          整体架构                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   用户打开 PDF                                                      │
-│        ↓                                                            │
-│   ┌─────────────────────────────────────────────────────────────┐  │
-│   │                    前端 (React)                              │  │
-│   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │  │
-│   │  │ PDFViewer   │  │ Interactive │  │ ReferenceSidebar    │  │  │
-│   │  │ (react-pdf) │  │ Layer       │  │ + AI 对话           │  │  │
-│   │  └─────────────┘  └─────────────┘  └─────────────────────┘  │  │
-│   └─────────────────────────────────────────────────────────────┘  │
-│                              ↑↓                                     │
-│   ┌─────────────────────────────────────────────────────────────┐  │
-│   │                    Tauri 后端 (Rust)                         │  │
-│   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │  │
-│   │  │ PDF 管理    │  │ OCR 调度    │  │ 缓存管理            │  │  │
-│   │  └─────────────┘  └─────────────┘  └─────────────────────┘  │  │
-│   └─────────────────────────────────────────────────────────────┘  │
-│                              ↑↓                                     │
-│   ┌─────────────────────────────────────────────────────────────┐  │
-│   │                    OCR 后端（可选）                          │  │
-│   │                                                             │  │
-│   │  🚀 DeepSeek-OCR     ⚡ PP-Structure    ☁️ 云端 API         │  │
-│   │     (首选)              (轻量)            (可选)             │  │
-│   │     3B 模型             ~500MB            无本地模型         │  │
-│   │     vLLM/transformers   PaddlePaddle                        │  │
-│   │                                                             │  │
-│   └─────────────────────────────────────────────────────────────┘  │
-│                              ↓                                      │
-│   结构化 JSON（元素类型 + bbox + 内容）                            │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 八、开发计划
+## 七、开发计划
 
 ### Phase 1：基础 PDF 查看器（1-2 天）
 
@@ -757,19 +577,18 @@ fn cleanup_old_cache() {
 - [ ] 翻页/缩放控制
 - [ ] 文本选择/搜索
 
-### Phase 2：DeepSeek-OCR 集成（3-4 天）
+### Phase 2：MinerU 集成（2-3 天）
 
-- [ ] 搭建 Python OCR 服务（vLLM 或 transformers）
-- [ ] Rust 后端调用 OCR 服务
-- [ ] 解析 grounding 输出，提取 bbox
+- [ ] Rust 后端调用 MinerU
 - [ ] 解析结果缓存
+- [ ] 结构化数据接口
 
 ### Phase 3：交互层实现（2-3 天）
 
-- [ ] 元素覆盖层渲染（基于 bbox）
+- [ ] 元素覆盖层渲染
 - [ ] 悬停高亮效果
 - [ ] 点击选择功能
-- [ ] 元素类型图标（📊📋📐）
+- [ ] 元素类型图标
 
 ### Phase 4：引用侧边栏（1-2 天）
 
@@ -783,21 +602,16 @@ fn cleanup_old_cache() {
 - [ ] 多模态图片支持
 - [ ] 上下文关联
 
-### Phase 6：备选后端（可选）
+### Phase 6：高级功能（可选）
 
-- [ ] PP-Structure 支持（轻量备选）
-- [ ] 云端 API 支持
-- [ ] 手动框选区域（零模型方案）
-
-### Phase 7：高级功能（可选）
-
+- [ ] 手动框选区域
 - [ ] PDF 注释/高亮
 - [ ] 导出引用为笔记
 - [ ] 批量处理多个 PDF
 
 ---
 
-## 九、依赖清单
+## 八、依赖清单
 
 ### 前端
 
@@ -808,90 +622,47 @@ fn cleanup_old_cache() {
 }
 ```
 
-### OCR 后端
+### 后端/工具
 
-#### DeepSeek-OCR（首选）
-
-```bash
-# 环境
-conda create -n deepseek-ocr python=3.12.9
-conda activate deepseek-ocr
-
-# 依赖
-pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu118
-pip install vllm  # 或 transformers
-pip install flash-attn==2.7.3 --no-build-isolation
-
-# 模型
-# 自动从 HuggingFace 下载: deepseek-ai/DeepSeek-OCR
-```
-
-#### PP-Structure（轻量备选）
-
-```bash
-pip install paddlepaddle paddleocr
-# 或
-pip install "paddleocr[structure]"
-```
+- **MinerU**: `pip install magic-pdf[full]`
+- 或 Docker: `opendatalab/mineru`
 
 ### 系统要求
 
-| 后端 | GPU | RAM | 磁盘 |
-|------|-----|-----|------|
-| DeepSeek-OCR | 8GB+ 推荐 | 16GB+ | ~6GB 模型 |
-| PP-Structure | 可选 | 8GB+ | ~500MB |
+- Python 3.8+（MinerU 运行环境）
+- 约 2-4GB 磁盘空间（模型文件）
 
 ---
 
-## 十、参考资料
+## 九、参考资料
 
-- [DeepSeek-OCR GitHub](https://github.com/deepseek-ai/DeepSeek-OCR) ⭐ 首选
-- [PP-Structure 文档](https://github.com/PaddlePaddle/PaddleOCR/tree/main/ppstructure)
-- [MinerU GitHub](https://github.com/opendatalab/MinerU) 参考
+- [MinerU GitHub](https://github.com/opendatalab/MinerU)
 - [react-pdf 文档](https://github.com/wojtekmaj/react-pdf)
 - [pdf.js 官方](https://mozilla.github.io/pdf.js/)
-- [vLLM 文档](https://docs.vllm.ai/)
 
 ---
 
-## 十一、待讨论问题
+## 十、待讨论问题
 
-### 已决定 ✅
-
-1. **首选 OCR 方案** → DeepSeek-OCR（3B，单模型，有 grounding）
-2. **轻量备选** → PP-Structure（无 GPU 可用）
-3. **按需解析** → 用户主动触发，不自动解析所有 PDF
-
-### 待讨论 🔶
-
-1. **模型分发方式**
-   - 首次使用时下载？（推荐）
-   - 打包到安装包？（太大）
-   - 让用户自行安装环境？
+1. **MinerU 部署方式**
+   - 本地 Python 环境？
+   - Docker 容器？
+   - 云服务？
 
 2. **首次解析体验**
-   - 解析可能需要 10-30 秒
-   - 显示进度条 + 预览？
-   - 支持取消？
+   - MinerU 解析较慢（复杂 PDF 可能需要几十秒）
+   - 是否显示进度条？
+   - 是否支持取消？
 
-3. **低配设备策略**
-   - 自动检测硬件，推荐合适后端？
-   - 提供量化版本？
-   - 云端 API 作为兜底？
+3. **离线支持**
+   - MinerU 需要模型文件
+   - 是否打包到应用中？
+   - 还是首次使用时下载？
 
 4. **框选功能**
    - 是否同时支持手动框选？
-   - 框选后截图 vs 单独 OCR？
+   - 框选后如何处理（截图 vs OCR）？
 
 5. **笔记集成**
-   - 引用如何嵌入 Markdown？
-   - 图片存储方式？
-   - 是否支持引用跳转？
-
----
-
-## 十二、更新日志
-
-| 日期 | 更新内容 |
-|------|---------|
-| 2025-12-01 | 初始版本，确定 DeepSeek-OCR 为首选方案 |
+   - 引用的元素如何嵌入到 Markdown 笔记中？
+   - 使用什么格式保存？

@@ -1,7 +1,5 @@
 <div align="center">
 
-**[English](./README_EN.md)** | **简体中文**
-
 <img src="https://via.placeholder.com/120x120?text=Logo" alt="Lumina Note Logo" width="120" height="120" />
 
 # ✨ Lumina Note
