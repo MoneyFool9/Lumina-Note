@@ -3,7 +3,7 @@
  * 当用户在编辑器中选中文字时显示，提供 "Add to Chat" 功能
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { MessageSquarePlus, Video, Sparkles } from "lucide-react";
 import { useAIStore } from "@/stores/useAIStore";
 import { useFileStore } from "@/stores/useFileStore";
@@ -22,6 +22,8 @@ export function SelectionToolbar({ containerRef }: SelectionToolbarProps) {
   const [isTodoing, setIsTodoing] = useState(false);
   const { addTextSelection } = useAIStore();
   const { currentFile, openVideoNoteFromContent } = useFileStore();
+
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
 
   const handleSelectionChange = useCallback(() => {
     const selection = window.getSelection();
@@ -50,39 +52,49 @@ export function SelectionToolbar({ containerRef }: SelectionToolbarProps) {
 
     setSelectedText(text);
 
-    // 计算工具栏位置（在选区右侧）
     const rect = range.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
-    
-    // 考虑滚动偏移
+
     const scrollTop = container.scrollTop;
     const scrollLeft = container.scrollLeft;
-    
-    // 工具栏大约宽度 130px
-    const toolbarWidth = 140;
-    let x = rect.right - containerRect.left + scrollLeft + 8;  // 选区右边 + 8px 间距
-    let y = rect.top - containerRect.top + scrollTop + rect.height / 2;  // 垂直居中
-    
-    // 边界检测：如果右侧放不下，尝试左侧
-    if (rect.right - containerRect.left + toolbarWidth + 8 > containerRect.width) {
-      const leftX = rect.left - containerRect.left + scrollLeft - toolbarWidth - 8;
-      // 如果左侧也放不下（会变成负数），就放在选区正上方
-      if (leftX < scrollLeft) {
-        x = rect.left - containerRect.left + scrollLeft;
-        y = rect.top - containerRect.top + scrollTop - 40;  // 选区上方
-      } else {
+
+    // 优先用真实宽高，其次退回估算值
+    const approxWidth = 160;
+    const approxHeight = 32;
+    const toolbarWidth = toolbarRef.current?.offsetWidth || approxWidth;
+    const toolbarHeight = toolbarRef.current?.offsetHeight || approxHeight;
+
+    const padding = 8; // 与选区/边界的间距
+
+    // 基于容器坐标系的选区中心
+    const selectionCenterY = rect.top - containerRect.top + scrollTop + rect.height / 2;
+
+    let x = 0;
+    let y = selectionCenterY - toolbarHeight / 2;
+
+    const containerRight = scrollLeft + containerRect.width;
+
+    // 1. 优先尝试放在右侧
+    const rightX = rect.right - containerRect.left + scrollLeft + padding;
+    if (rightX + toolbarWidth + padding <= containerRight) {
+      x = rightX;
+    } else {
+      // 2. 右侧放不下，尝试左侧
+      const leftX = rect.left - containerRect.left + scrollLeft - toolbarWidth - padding;
+      if (leftX >= scrollLeft + padding) {
         x = leftX;
+      } else {
+        // 3. 左右都不行，放到选区上方，水平靠左对齐选区
+        x = Math.max(scrollLeft + padding, rect.left - containerRect.left + scrollLeft);
+        y = rect.top - containerRect.top + scrollTop - toolbarHeight - padding;
       }
     }
-    
-    // 确保 x 不小于 0
-    x = Math.max(scrollLeft + 8, x);
-    
-    // 确保 y 在可视区域内（相对于滚动位置）
-    const viewportTop = scrollTop;
-    const viewportBottom = scrollTop + containerRect.height;
-    y = Math.max(viewportTop + 20, Math.min(y, viewportBottom - 40));
-    
+
+    // 垂直边界修正
+    const viewportTop = scrollTop + padding;
+    const viewportBottom = scrollTop + containerRect.height - toolbarHeight - padding;
+    y = Math.max(viewportTop, Math.min(y, viewportBottom));
+
     setPosition({ x, y });
   }, [containerRef]);
 
@@ -354,33 +366,34 @@ export function SelectionToolbar({ containerRef }: SelectionToolbarProps) {
     <div
       data-selection-toolbar
       className="absolute z-50 transform -translate-y-1/2"
+      ref={toolbarRef}
       style={{
         left: position.x,
         top: position.y,
       }}
     >
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-background border border-border rounded-lg shadow-lg">
+      <div className="flex items-center gap-0.5 px-1.5 py-1 bg-background border border-border rounded-lg shadow-lg">
         <button
           onClick={handleAddToChat}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap"
           title="添加到对话"
         >
-          <MessageSquarePlus size={14} />
+          <MessageSquarePlus size={13} />
           <span>Add to Chat</span>
         </button>
         <button
           onClick={handleSummarize}
           disabled={isSummarizing}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           title="对选中文本生成总结并插入到下方"
         >
-          <Sparkles size={14} className={isSummarizing ? "animate-spin" : ""} />
+          <Sparkles size={13} className={isSummarizing ? "animate-spin" : ""} />
           <span>Summary</span>
         </button>
         <button
           onClick={handleTranslate}
           disabled={isTranslating}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           title="翻译选中的文本（中英互译）"
         >
           <span className={isTranslating ? "animate-spin" : ""}>译</span>
@@ -389,7 +402,7 @@ export function SelectionToolbar({ containerRef }: SelectionToolbarProps) {
         <button
           onClick={handlePolish}
           disabled={isPolishing}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           title="润色选中的文本"
         >
           <span className={isPolishing ? "animate-spin" : ""}>✎</span>
@@ -398,7 +411,7 @@ export function SelectionToolbar({ containerRef }: SelectionToolbarProps) {
         <button
           onClick={handleTodo}
           disabled={isTodoing}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
           title="从选中文本生成待办清单 (- [ ] ...)"
         >
           <span className={isTodoing ? "animate-spin" : ""}>☑</span>
@@ -406,10 +419,10 @@ export function SelectionToolbar({ containerRef }: SelectionToolbarProps) {
         </button>
         <button
           onClick={handleOpenAsVideoNote}
-          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap"
+          className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent rounded transition-colors whitespace-nowrap"
           title="作为视频笔记打开（支持识别时间戳）"
         >
-          <Video size={14} />
+          <Video size={13} />
           <span>Video Note</span>
         </button>
       </div>
