@@ -33,6 +33,12 @@ export interface ThemeColors {
   listMarker: string;       // 列表标记
   highlight: string;        // 高亮背景
   tag: string;              // 标签颜色
+
+  // Diff (代码对比) 颜色
+  diffAddBg: string;        // 新增代码背景
+  diffAddText: string;      // 新增代码文字
+  diffRemoveBg: string;     // 删除代码背景
+  diffRemoveText: string;   // 删除代码文字
 }
 
 export interface Theme {
@@ -79,6 +85,11 @@ function createThemeColors(
       listMarker: `${primaryHue} ${primarySat - 5}% 50%`,
       highlight: `50 80% 85%`,
       tag: `${primaryHue + 30} ${primarySat}% 45%`,
+      // 默认 Diff 颜色：柔和舒适
+      diffAddBg: `160 40% 92%`,
+      diffAddText: `160 50% 30%`,
+      diffRemoveBg: `350 40% 94%`,
+      diffRemoveText: `350 50% 35%`,
     },
     dark: {
       background: `${hue} ${satDark}% 11%`,
@@ -107,6 +118,11 @@ function createThemeColors(
       listMarker: `${primaryHue} ${primarySat - 10}% 60%`,
       highlight: `50 50% 25%`,
       tag: `${primaryHue + 30} ${primarySat - 5}% 60%`,
+      // 默认 Diff 颜色：深色模式
+      diffAddBg: `160 35% 20%`,
+      diffAddText: `160 50% 70%`,
+      diffRemoveBg: `350 35% 22%`,
+      diffRemoveText: `350 50% 70%`,
     },
   };
 }
@@ -203,7 +219,7 @@ export const OFFICIAL_THEMES: Theme[] = [
        heading: "260 80% 40%",
        link: "190 100% 40%",
        linkHover: "320 100% 50%",
-       code: "320 100% 45%",
+       code: "330 65% 45%",
        codeBg: "280 20% 92%",
        codeBlock: "260 60% 40%",
        codeBlockBg: "280 20% 95%",
@@ -213,10 +229,15 @@ export const OFFICIAL_THEMES: Theme[] = [
        tableBorder: "280 20% 80%",
        tableHeaderBg: "300 30% 95%",
        bold: "260 80% 30%",
-       italic: "320 80% 40%",
+       italic: "35 80% 45%",
        listMarker: "190 100% 40%",
        highlight: "60 100% 80%",
        tag: "320 80% 45%",
+       // 赛博朋克风 Diff：霓虹感
+       diffAddBg: "190 50% 90%",
+       diffAddText: "190 100% 30%",
+       diffRemoveBg: "320 50% 95%",
+       diffRemoveText: "320 100% 35%",
     },
     dark: {
        background: "265 50% 10%",
@@ -245,6 +266,11 @@ export const OFFICIAL_THEMES: Theme[] = [
        listMarker: "60 100% 50%",
        highlight: "320 100% 30%",
        tag: "190 100% 40%",
+       // 赛博朋克风 Diff：深色霓虹
+       diffAddBg: "190 60% 15%",
+       diffAddText: "190 100% 70%",
+       diffRemoveBg: "320 60% 15%",
+       diffRemoveText: "320 100% 70%",
     }
   },
 
@@ -262,6 +288,7 @@ export const OFFICIAL_THEMES: Theme[] = [
        primary: "265 60% 50%",
        primaryForeground: "0 0% 98%",
        border: "220 15% 85%",
+       // Markdown - 丰富的复古撞色
        heading: "230 25% 30%",
        link: "265 60% 50%",
        linkHover: "330 70% 50%",
@@ -272,13 +299,18 @@ export const OFFICIAL_THEMES: Theme[] = [
        blockquote: "230 10% 50%",
        blockquoteBorder: "135 50% 45%",
        hr: "220 15% 80%",
-       tableBorder: "220 15% 85%",
-       tableHeaderBg: "220 20% 94%",
+       tableBorder: "220 15% 80%",
+       tableHeaderBg: "220 20% 88%",
        bold: "265 60% 45%",
        italic: "35 80% 45%",
        listMarker: "135 60% 40%",
        highlight: "60 80% 85%",
        tag: "265 50% 50%",
+       // Dracula 浅色 Diff
+       diffAddBg: "135 50% 92%",
+       diffAddText: "135 70% 30%",
+       diffRemoveBg: "330 50% 95%",
+       diffRemoveText: "330 70% 35%",
     },
     dark: {
        background: "231 15% 18%",
@@ -290,6 +322,7 @@ export const OFFICIAL_THEMES: Theme[] = [
        primary: "265 89% 68%",
        primaryForeground: "231 15% 18%",
        border: "231 15% 35%",
+       // Markdown
        heading: "265 89% 78%",
        link: "191 97% 77%",
        linkHover: "135 94% 65%",
@@ -307,6 +340,11 @@ export const OFFICIAL_THEMES: Theme[] = [
        listMarker: "191 97% 77%",
        highlight: "60 50% 40%",
        tag: "326 90% 70%",
+       // Dracula 经典 Diff 配色
+       diffAddBg: "135 50% 20%",
+       diffAddText: "135 94% 75%",
+       diffRemoveBg: "340 50% 25%",
+       diffRemoveText: "340 94% 75%",
     }
   },
 
@@ -324,6 +362,7 @@ export const OFFICIAL_THEMES: Theme[] = [
        primary: "168 60% 35%",
        primaryForeground: "44 87% 96%",
        border: "42 35% 85%",
+       // Markdown - 丰富的复古撞色
        heading: "16 70% 45%",
        link: "205 70% 45%",
        linkHover: "16 80% 50%",
@@ -341,6 +380,11 @@ export const OFFICIAL_THEMES: Theme[] = [
        listMarker: "168 60% 35%",
        highlight: "50 90% 85%",
        tag: "205 60% 50%",
+       // Solarized Diff：橄榄绿和橙红
+       diffAddBg: "65 50% 88%",
+       diffAddText: "65 80% 30%",
+       diffRemoveBg: "16 60% 92%",
+       diffRemoveText: "16 80% 40%",
     },
     dark: {
        background: "192 81% 14%",
@@ -352,6 +396,7 @@ export const OFFICIAL_THEMES: Theme[] = [
        primary: "205 70% 50%",
        primaryForeground: "0 0% 95%",
        border: "192 60% 20%",
+       // Markdown
        heading: "35 80% 50%",
        link: "168 60% 50%",
        linkHover: "35 90% 60%",
@@ -369,6 +414,11 @@ export const OFFICIAL_THEMES: Theme[] = [
        listMarker: "168 60% 50%",
        highlight: "192 50% 25%",
        tag: "330 60% 55%",
+       // Solarized Dark Diff
+       diffAddBg: "65 50% 20%",
+       diffAddText: "65 60% 60%",
+       diffRemoveBg: "16 50% 22%",
+       diffRemoveText: "16 60% 60%",
     }
   },
 
@@ -404,6 +454,11 @@ export const OFFICIAL_THEMES: Theme[] = [
        listMarker: "35 85% 45%",  // 橙色列表点
        highlight: "50 90% 80%",   // 亮黄色高亮
        tag: "215 60% 50%",
+       // Gruvbox 经典复古红绿
+       diffAddBg: "142 50% 85%",
+       diffAddText: "142 80% 25%",
+       diffRemoveBg: "0 60% 90%",
+       diffRemoveText: "0 80% 30%",
     },
     dark: {
        background: "20 15% 18%",  // 深炭褐色背景
@@ -414,7 +469,7 @@ export const OFFICIAL_THEMES: Theme[] = [
        accentForeground: "45 25% 90%",
        primary: "35 85% 60%",     // 复古橙作为主色
        primaryForeground: "20 15% 15%",
-       border: "20 15% 30%",
+       border: "20 15% 35%",
        // Markdown
        heading: "45 90% 65%",     // 复古黄标题
        link: "215 75% 65%",       // 复古亮蓝链接
@@ -433,6 +488,11 @@ export const OFFICIAL_THEMES: Theme[] = [
        listMarker: "45 90% 65%",  // 黄色列表点
        highlight: "35 80% 35%",
        tag: "270 60% 65%",
+       // Gruvbox Dark Diff
+       diffAddBg: "142 40% 20%",
+       diffAddText: "142 70% 70%",
+       diffRemoveBg: "0 40% 20%",
+       diffRemoveText: "0 70% 70%",
     }
   },
 ];
@@ -471,6 +531,12 @@ export function applyTheme(theme: Theme, isDark: boolean) {
   root.style.setProperty("--md-list-marker", colors.listMarker);
   root.style.setProperty("--md-highlight", colors.highlight);
   root.style.setProperty("--md-tag", colors.tag);
+
+  // Diff 颜色
+  root.style.setProperty("--diff-add-bg", colors.diffAddBg);
+  root.style.setProperty("--diff-add-text", colors.diffAddText);
+  root.style.setProperty("--diff-remove-bg", colors.diffRemoveBg);
+  root.style.setProperty("--diff-remove-text", colors.diffRemoveText);
 }
 
 // 根据 ID 获取主题

@@ -115,11 +115,11 @@ function PreviewDiffView({ diffLines }: { diffLines: DiffLine[] }) {
           return (
             <div 
               key={idx}
-              className="relative bg-red-500/10 border-l-4 border-red-500 pl-4 py-2 my-2 rounded-r"
+              className="relative bg-[hsl(var(--diff-remove-bg)/0.15)] border-l-4 border-[hsl(var(--diff-remove-text)/0.5)] pl-4 py-2 my-2 rounded-r"
             >
-              <span className="absolute left-0 top-0 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-br">删除</span>
+              <span className="absolute left-0 top-0 text-xs bg-[hsl(var(--diff-remove-text))] text-white px-1.5 py-0.5 rounded-br">删除</span>
               <div 
-                className="line-through opacity-70 text-red-700 dark:text-red-400 pt-4"
+                className="line-through opacity-60 text-[hsl(var(--diff-remove-text))] pt-4"
                 dangerouslySetInnerHTML={{ __html: html }} 
               />
             </div>
@@ -130,11 +130,11 @@ function PreviewDiffView({ diffLines }: { diffLines: DiffLine[] }) {
           return (
             <div 
               key={idx}
-              className="relative bg-green-500/10 border-l-4 border-green-500 pl-4 py-2 my-2 rounded-r"
+              className="relative bg-[hsl(var(--diff-add-bg)/0.15)] border-l-4 border-[hsl(var(--diff-add-text)/0.5)] pl-4 py-2 my-2 rounded-r"
             >
-              <span className="absolute left-0 top-0 text-xs bg-green-500 text-white px-1.5 py-0.5 rounded-br">新增</span>
+              <span className="absolute left-0 top-0 text-xs bg-[hsl(var(--diff-add-text))] text-white px-1.5 py-0.5 rounded-br">新增</span>
               <div 
-                className="text-green-700 dark:text-green-400 pt-4"
+                className="text-[hsl(var(--diff-add-text))] pt-4"
                 dangerouslySetInnerHTML={{ __html: html }} 
               />
             </div>
@@ -158,8 +158,8 @@ function SourceDiffView({ diffLines }: { diffLines: DiffLine[] }) {
               key={idx}
               className={cn(
                 "border-b border-border/30",
-                line.type === "added" && "bg-green-500/10",
-                line.type === "removed" && "bg-red-500/10"
+                line.type === "added" && "bg-[hsl(var(--diff-add-bg)/0.15)]",
+                line.type === "removed" && "bg-[hsl(var(--diff-remove-bg)/0.15)]"
               )}
             >
               <td className="w-12 px-2 py-0.5 text-right text-muted-foreground/50 select-none border-r border-border/30">
@@ -170,16 +170,16 @@ function SourceDiffView({ diffLines }: { diffLines: DiffLine[] }) {
               </td>
               <td className={cn(
                 "w-6 px-1 text-center select-none",
-                line.type === "added" && "text-green-600",
-                line.type === "removed" && "text-red-600"
+                line.type === "added" && "text-[hsl(var(--diff-add-text))]",
+                line.type === "removed" && "text-[hsl(var(--diff-remove-text))]"
               )}>
                 {line.type === "added" && "+"}
                 {line.type === "removed" && "-"}
               </td>
               <td className={cn(
                 "px-2 py-0.5 whitespace-pre-wrap",
-                line.type === "added" && "text-green-700 dark:text-green-400",
-                line.type === "removed" && "text-red-700 dark:text-red-400 line-through opacity-70"
+                line.type === "added" && "text-[hsl(var(--diff-add-text))]",
+                line.type === "removed" && "text-[hsl(var(--diff-remove-text))] line-through opacity-60"
               )}>
                 {line.content || " "}
               </td>
@@ -254,8 +254,8 @@ export function DiffView({
           <FileText size={16} className="text-yellow-600" />
           <span className="font-medium text-sm">AI 修改预览</span>
           <span className="text-xs text-muted-foreground">{fileName}</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-600">+{stats.added}</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-600">-{stats.removed}</span>
+          <span className="text-xs px-2 py-0.5 rounded bg-[hsl(var(--diff-add-bg)/0.3)] text-[hsl(var(--diff-add-text))]">+{stats.added}</span>
+          <span className="text-xs px-2 py-0.5 rounded bg-[hsl(var(--diff-remove-bg)/0.3)] text-[hsl(var(--diff-remove-text))]">-{stats.removed}</span>
         </div>
         <div className="flex items-center gap-2">
           {/* View mode toggle */}
