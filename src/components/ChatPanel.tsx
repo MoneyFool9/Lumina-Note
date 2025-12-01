@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { diffLines } from "diff";
 import { useAIStore } from "@/stores/useAIStore";
 import { useFileStore } from "@/stores/useFileStore";
 import { EditSuggestion, applyEdit } from "@/lib/ai";
@@ -18,7 +19,7 @@ import {
   Square,
 } from "lucide-react";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
-import { ChatInput } from "./ChatInput";
+import { ChatInput, type ChatInputRef } from "./ChatInput";
 import { processMessageWithFiles, type ReferencedFile } from "@/hooks/useChatSend";
 
 // Edit suggestion card
@@ -31,22 +32,59 @@ function EditCard({
   onApply: () => void; 
   onReject: () => void;
 }) {
+  const diff = useMemo(() => {
+    return diffLines(edit.originalContent, edit.newContent);
+  }, [edit.originalContent, edit.newContent]);
+
   return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="truncate flex-1">{edit.description || "修改建议"}</span>
-      <div className="flex gap-1 ml-2">
-        <button 
-          onClick={onApply}
-          className="px-2 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-        >
-          预览
-        </button>
-        <button 
-          onClick={onReject}
-          className="px-2 py-1 bg-muted text-muted-foreground rounded hover:bg-muted/80"
-        >
-          忽略
-        </button>
+    <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-primary flex items-center gap-1">
+          <FileText size={12} />
+          {edit.filePath.split(/[/\\]/).pop()}
+        </span>
+        <div className="flex gap-1">
+          <button
+            onClick={onApply}
+            className="px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors text-xs font-medium"
+            title="预览修改"
+          >
+            预览
+          </button>
+          <button
+            onClick={onReject}
+            className="p-1 rounded bg-red-500/20 text-red-600 hover:bg-red-500/30 transition-colors"
+            title="忽略"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">{edit.description}</p>
+      
+      <div className="text-xs font-mono bg-background/50 rounded border border-border overflow-hidden max-h-[200px] overflow-y-auto">
+        {diff.map((part, index) => {
+          if (part.added) {
+            return (
+              <div key={index} className="bg-green-500/10 text-green-600 px-2 py-0.5 whitespace-pre-wrap border-l-2 border-green-500">
+                {part.value}
+              </div>
+            );
+          }
+          if (part.removed) {
+            return (
+              <div key={index} className="bg-red-500/10 text-red-600 px-2 py-0.5 whitespace-pre-wrap line-through opacity-70 border-l-2 border-red-500">
+                {part.value}
+              </div>
+            );
+          }
+          // Context
+          return (
+            <div key={index} className="text-muted-foreground px-2 py-0.5 whitespace-pre-wrap opacity-50">
+              {part.value}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -76,6 +114,7 @@ export function ChatPanel({ compact = false }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<ChatInputRef>(null);
   const { isRecording, interimText, toggleRecording } = useSpeechToText((text: string) => {
     setInputValue((prev) => (prev ? prev + " " + text : text));
   });
@@ -204,6 +243,7 @@ export function ChatPanel({ compact = false }: ChatPanelProps) {
           </div>
         ))}
 
+
         {/* Pending edits */}
         {pendingEdits.length > 0 && (
           <div className="space-y-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
@@ -263,6 +303,7 @@ export function ChatPanel({ compact = false }: ChatPanelProps) {
       <div className={compact ? "p-2 border-t border-border" : "p-3 border-t border-border"}>
         <div className="bg-muted/30 border border-border rounded-lg p-2 focus-within:ring-1 focus-within:ring-primary/50 transition-all">
           <ChatInput
+            ref={chatInputRef}
             value={inputValue}
             onChange={setInputValue}
             onSend={handleSendWithFiles}

@@ -56,8 +56,17 @@ import {
 export function createProvider(): LLMProvider {
   const rawConfig = getLLMConfig();
 
+  console.log('[AI Debug] createProvider() called', {
+    provider: rawConfig.provider,
+    model: rawConfig.model,
+    hasApiKey: !!rawConfig.apiKey,
+    apiKeyLength: rawConfig.apiKey?.length || 0,
+    baseUrl: rawConfig.baseUrl,
+  });
+
   // Ollama 不需要 API Key
   if (!rawConfig.apiKey && rawConfig.provider !== "ollama") {
+    console.error('[AI Debug] No API key found for', rawConfig.provider);
     throw new Error("请先配置 API Key");
   }
 
@@ -68,6 +77,12 @@ export function createProvider(): LLMProvider {
       ? rawConfig.customModelId 
       : rawConfig.model,
   };
+
+  console.log('[AI Debug] Final config:', {
+    provider: config.provider,
+    model: config.model,
+    baseUrl: config.baseUrl,
+  });
 
   switch (config.provider) {
     case "anthropic":
@@ -87,6 +102,7 @@ export function createProvider(): LLMProvider {
     case "ollama":
       return new OllamaProvider(config);
     default:
+      console.error('[AI Debug] Unsupported provider:', config.provider);
       throw new Error(`不支持的 AI 提供商: ${config.provider}`);
   }
 }
@@ -98,13 +114,23 @@ export async function callLLM(
   messages: Message[],
   options?: LLMOptions
 ): Promise<LLMResponse> {
-  const provider = createProvider();
-  const config = getLLMConfig();
-  const finalOptions = {
-    ...options,
-    temperature: options?.temperature ?? config.temperature,
-  };
-  return provider.call(messages, finalOptions);
+  console.log('[AI Debug] callLLM() called with', messages.length, 'messages');
+  
+  try {
+    const provider = createProvider();
+    const config = getLLMConfig();
+    const finalOptions = {
+      ...options,
+      temperature: options?.temperature ?? config.temperature,
+    };
+    console.log('[AI Debug] Provider created, calling provider.call()');
+    const response = await provider.call(messages, finalOptions);
+    console.log('[AI Debug] Provider.call() returned successfully');
+    return response;
+  } catch (error) {
+    console.error('[AI Debug] Error in callLLM():', error);
+    throw error;
+  }
 }
 
 /**

@@ -200,7 +200,14 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
               <label className="text-xs text-muted-foreground block mb-1">模型</label>
               <select
                 value={PROVIDER_REGISTRY[config.provider as LLMProviderType]?.models.some(m => m.id === config.model) ? config.model : "custom"}
-                onChange={(e) => setConfig({ model: e.target.value })}
+                onChange={(e) => {
+                  const newModel = e.target.value;
+                  if (newModel === "custom") {
+                    setConfig({ model: newModel, customModelId: "" });
+                  } else {
+                    setConfig({ model: newModel });
+                  }
+                }}
                 className="w-full text-xs p-2 rounded border border-border bg-background"
               >
                 {PROVIDER_REGISTRY[config.provider as LLMProviderType]?.models.map((model) => (
@@ -220,7 +227,7 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
                   type="text"
                   value={config.customModelId || ""}
                   onChange={(e) => setConfig({ customModelId: e.target.value })}
-                  placeholder="输入模型 ID"
+                  placeholder="例如：deepseek-ai/DeepSeek-V3"
                   className="w-full text-xs p-2 rounded border border-border bg-background"
                 />
               </div>

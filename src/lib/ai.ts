@@ -142,6 +142,11 @@ export async function chat(
   messages: Message[],
   files: FileReference[] = []
 ): Promise<ChatResponse> {
+  console.log('[AI Debug] chat() called', {
+    messagesCount: messages.length,
+    filesCount: files.length,
+  });
+
   const systemPrompt = buildSystemPrompt(files);
   
   // 构建完整消息列表
@@ -150,17 +155,29 @@ export async function chat(
     ...messages,
   ];
 
-  // 使用统一的 LLM 服务
-  const response = await callLLM(fullMessages);
+  console.log('[AI Debug] Calling callLLM with', fullMessages.length, 'messages');
 
-  return {
-    content: response.content,
-    usage: response.usage ? {
-      prompt_tokens: response.usage.promptTokens,
-      completion_tokens: response.usage.completionTokens,
-      total_tokens: response.usage.totalTokens,
-    } : undefined,
-  };
+  try {
+    // 使用统一的 LLM 服务
+    const response = await callLLM(fullMessages);
+
+    console.log('[AI Debug] callLLM response:', {
+      contentLength: response.content?.length || 0,
+      hasUsage: !!response.usage,
+    });
+
+    return {
+      content: response.content,
+      usage: response.usage ? {
+        prompt_tokens: response.usage.promptTokens,
+        completion_tokens: response.usage.completionTokens,
+        total_tokens: response.usage.totalTokens,
+      } : undefined,
+    };
+  } catch (error) {
+    console.error('[AI Debug] Error in chat():', error);
+    throw error;
+  }
 }
 
 // Apply edit suggestion to content

@@ -98,10 +98,8 @@ export function PDFOutline({
       try {
         setLoading(true);
         
-        // 创建独立副本避免 ArrayBuffer detached
-        // 使用 slice 创建真正独立的副本
-        const copy = pdfData.slice(0);
-        
+        // 使用独立副本加载 PDF
+        const copy = pdfData.slice();
         const loadingTask = pdfjs.getDocument({ data: copy });
         const doc = await loadingTask.promise;
         

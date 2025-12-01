@@ -16,6 +16,8 @@ interface PDFToolbarProps {
   onScaleChange: (scale: number) => void;
   onFitWidth?: () => void;
   searchSlot?: React.ReactNode;
+  onToggleSidebar?: () => void;
+  sidebarVisible?: boolean;
   className?: string;
 }
 

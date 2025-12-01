@@ -583,7 +583,15 @@ export function RightPanel() {
                   <label className="text-xs text-muted-foreground block mb-1">模型</label>
                   <select
                     value={PROVIDER_REGISTRY[config.provider as LLMProviderType]?.models.some(m => m.id === config.model) ? config.model : "custom"}
-                    onChange={(e) => setConfig({ model: e.target.value })}
+                    onChange={(e) => {
+                      const newModel = e.target.value;
+                      if (newModel === "custom") {
+                        // 选择自定义模型时，清空 customModelId
+                        setConfig({ model: newModel, customModelId: "" });
+                      } else {
+                        setConfig({ model: newModel });
+                      }
+                    }}
                     className="w-full text-xs p-2 rounded border border-border bg-background"
                   >
                     {PROVIDER_REGISTRY[config.provider as LLMProviderType]?.models.map((model) => (
@@ -603,9 +611,12 @@ export function RightPanel() {
                       type="text"
                       value={config.customModelId || ""}
                       onChange={(e) => setConfig({ customModelId: e.target.value })}
-                      placeholder="例如：gemini-2.5-pro-preview-06-05"
+                      placeholder="例如：deepseek-ai/DeepSeek-V3 或 Pro/ERNIE-4.0-Turbo-8K"
                       className="w-full text-xs p-2 rounded border border-border bg-background"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      💡 输入完整的模型 ID（包含命名空间，如有）
+                    </p>
                   </div>
                 )}
                 {/* 自定义 Base URL (所有 Provider 都支持) */}

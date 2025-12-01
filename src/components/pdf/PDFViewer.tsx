@@ -1,14 +1,16 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { PDFToolbar } from "./PDFToolbar";
 import { PDFCanvas } from "./PDFCanvas";
-import { PDFSidebar } from "./PDFSidebar";
+import { PDFOutline } from "./PDFOutline";
 import { PDFSearch } from "./PDFSearch";
 import { ElementPanel } from "./ElementPanel";
 import { usePDFStore } from "@/stores/usePDFStore";
 import { useElementSelection } from "@/hooks/useElementSelection";
 import { usePDFStructure } from "@/hooks/usePDFStructure";
+import { useAIStore } from "@/stores/useAIStore";
+import { useUIStore } from "@/stores/useUIStore";
 import { cn } from "@/lib/utils";
-import { FileText, Loader2, Sparkles } from "lucide-react";
+import { FileText, Loader2, Sparkles, ChevronLeft } from "lucide-react";
 import { readFile } from "@tauri-apps/plugin-fs";
 
 interface PDFViewerProps {
@@ -21,7 +23,7 @@ export function PDFViewer({ filePath, className }: PDFViewerProps) {
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showThumbnails, setShowThumbnails] = useState(true);
+  const [showOutline, setShowOutline] = useState(true);
   const [interactiveMode, setInteractiveMode] = useState(false);
   const { currentPage, scale, setCurrentPage, setScale } = usePDFStore();
   
@@ -108,34 +110,53 @@ export function PDFViewer({ filePath, className }: PDFViewerProps) {
 
   // 处理与 AI 对话
   const handleChatWithAI = useCallback(() => {
-    // TODO: 打开 AI 对话面板并传递选中的元素
-    console.log('Chat with AI:', selectedElements);
-  }, [selectedElements]);
+    if (selectedElements.length === 0) return;
+    
+    // 格式化选中的元素为引用文本
+    const pdfFileName = filePath.split(/[/\\]/).pop() || 'PDF';
+    const citations = selectedElements.map((el, index) => {
+      const typeLabels: Record<string, string> = {
+        text: '文本',
+        image: '图片',
+        table: '表格',
+        formula: '公式',
+      };
+      const typeLabel = typeLabels[el.type] || el.type;
+      
+      const content = el.content ? `\n${el.content}` : '';
+      return `[${index + 1}] ${typeLabel} (P${el.pageIndex})${content}`;
+    }).join('\n\n');
+    
+    const referenceText = `# PDF 引用 - ${pdfFileName}\n\n${citations}`;
+    
+    // 添加到 AI Store 的文本选择
+    useAIStore.getState().addTextSelection(
+      referenceText,
+      pdfFileName,
+      filePath
+    );
+    
+    // 打开 AI 悬浮面板
+    useUIStore.getState().setFloatingPanelOpen(true);
+    
+    // 清空选择
+    clearSelection();
+  }, [selectedElements, filePath, clearSelection]);
 
   // 为不同组件创建独立的数据副本，避免 ArrayBuffer detached 错误
-  // 每个副本都有独立的 ArrayBuffer
   const pdfDataForSearch = useMemo(() => {
     if (!pdfData) return null;
-    const buffer = new ArrayBuffer(pdfData.byteLength);
-    const copy = new Uint8Array(buffer);
-    copy.set(new Uint8Array(pdfData.buffer, pdfData.byteOffset, pdfData.byteLength));
-    return copy;
+    return pdfData.slice();
   }, [pdfData]);
 
-  const pdfDataForSidebar = useMemo(() => {
+  const pdfDataForOutline = useMemo(() => {
     if (!pdfData) return null;
-    const buffer = new ArrayBuffer(pdfData.byteLength);
-    const copy = new Uint8Array(buffer);
-    copy.set(new Uint8Array(pdfData.buffer, pdfData.byteOffset, pdfData.byteLength));
-    return copy;
+    return pdfData.slice();
   }, [pdfData]);
 
   const pdfDataForCanvas = useMemo(() => {
     if (!pdfData) return null;
-    const buffer = new ArrayBuffer(pdfData.byteLength);
-    const copy = new Uint8Array(buffer);
-    copy.set(new Uint8Array(pdfData.buffer, pdfData.byteOffset, pdfData.byteLength));
-    return copy;
+    return pdfData.slice();
   }, [pdfData]);
 
   // 加载中状态
@@ -186,20 +207,33 @@ export function PDFViewer({ filePath, className }: PDFViewerProps) {
             {filePath.split(/[\/\\]/).pop() || "PDF"}
           </span>
         </div>
-        {/* 交互模式切换 */}
-        <button
-          onClick={() => setInteractiveMode(!interactiveMode)}
-          className={cn(
-            "flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
-            interactiveMode
-              ? "bg-primary text-primary-foreground"
-              : "hover:bg-accent"
+        <div className="flex items-center gap-2">
+          {/* 显示/隐藏目录 */}
+          {!showOutline && (
+            <button
+              onClick={() => setShowOutline(true)}
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-accent transition-colors"
+              title="显示目录"
+            >
+              <FileText size={12} />
+              <span>目录</span>
+            </button>
           )}
-          title="元素识别模式"
-        >
-          <Sparkles size={12} />
-          <span>{interactiveMode ? "交互中" : "交互模式"}</span>
-        </button>
+          {/* 交互模式切换 */}
+          <button
+            onClick={() => setInteractiveMode(!interactiveMode)}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+              interactiveMode
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-accent"
+            )}
+            title="元素识别模式"
+          >
+            <Sparkles size={12} />
+            <span>{interactiveMode ? "交互中" : "交互模式"}</span>
+          </button>
+        </div>
       </div>
 
       {/* 工具栏 */}
@@ -217,17 +251,32 @@ export function PDFViewer({ filePath, className }: PDFViewerProps) {
         }
       />
 
-      {/* 主内容区：缩略图 + PDF 渲染 */}
+      {/* 主内容区：目录 + PDF 渲染 */}
       <div className="flex-1 flex overflow-hidden">
-        {/* PDF 侧边栏（缩略图 + 目录） */}
-        <PDFSidebar
-          pdfData={pdfDataForSidebar}
-          numPages={numPages}
-          currentPage={currentPage}
-          onPageClick={handlePageChange}
-          collapsed={!showThumbnails}
-          onToggle={() => setShowThumbnails(!showThumbnails)}
-        />
+        {/* 左侧边栏：目录 */}
+        {showOutline && (
+          <div className="flex flex-col w-64 border-r border-border bg-muted/30">
+            {/* 头部 */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+              <span className="text-sm font-medium">目录</span>
+              <button
+                onClick={() => setShowOutline(false)}
+                className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded"
+                title="收起目录"
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
+
+            {/* 目录内容 */}
+            <div className="flex-1 overflow-hidden">
+              <PDFOutline
+                pdfData={pdfDataForOutline}
+                onPageClick={handlePageChange}
+              />
+            </div>
+          </div>
+        )}
 
         {/* PDF 渲染区域 */}
         <PDFCanvas
@@ -237,6 +286,7 @@ export function PDFViewer({ filePath, className }: PDFViewerProps) {
           scale={scale}
           onDocumentLoad={handleDocumentLoad}
           onPageChange={handlePageChange}
+          onScaleChange={handleScaleChange}
           showInteractiveLayer={interactiveMode}
           elements={getAllElements()}
           selectedElementIds={selectedElementIds}

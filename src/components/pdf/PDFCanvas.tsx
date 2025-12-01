@@ -19,6 +19,7 @@ interface PDFCanvasProps {
   scale: number;
   onDocumentLoad?: (numPages: number) => void;
   onPageChange?: (page: number) => void;
+  onScaleChange?: (scale: number) => void;
   // 交互层相关
   showInteractiveLayer?: boolean;
   elements?: PDFElement[];
@@ -36,6 +37,7 @@ export function PDFCanvas({
   scale,
   onDocumentLoad,
   onPageChange,
+  onScaleChange,
   showInteractiveLayer = false,
   elements = [],
   selectedElementIds = [],
@@ -91,6 +93,51 @@ export function PDFCanvas({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentPage, numPages, onPageChange]);
+
+  // Ctrl+滚轮缩放（以鼠标为中心）
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onScaleChange) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // 检测 Ctrl 键（Windows/Linux）或 Cmd 键（Mac）
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+
+        // 获取鼠标在容器中的位置
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // 记录缩放前的滚动位置
+        const scrollLeft = container.scrollLeft;
+        const scrollTop = container.scrollTop;
+
+        // 计算鼠标在内容中的相对位置
+        const contentX = scrollLeft + mouseX;
+        const contentY = scrollTop + mouseY;
+
+        // 计算新的缩放比例
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        const newScale = Math.max(0.5, Math.min(3, scale + delta));
+
+        // 应用新的缩放
+        onScaleChange(newScale);
+
+        // 等待下一帧后调整滚动位置，保持鼠标位置不变
+        requestAnimationFrame(() => {
+          const scaleRatio = newScale / scale;
+          const newScrollLeft = contentX * scaleRatio - mouseX;
+          const newScrollTop = contentY * scaleRatio - mouseY;
+          container.scrollLeft = newScrollLeft;
+          container.scrollTop = newScrollTop;
+        });
+      }
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, [scale, onScaleChange]);
 
   // 创建 PDF 数据源（避免 ArrayBuffer detached）
   const pdfSource = useMemo(() => {

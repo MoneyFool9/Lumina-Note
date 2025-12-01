@@ -3,7 +3,7 @@
  * 支持 @ 引用文件和 📎 按钮选择文件
  */
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useFileStore } from "@/stores/useFileStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { Send, FileText, Folder, X, Loader2, Paperclip, Quote } from "lucide-react";
@@ -14,6 +14,11 @@ export interface ReferencedFile {
   path: string;
   name: string;
   isFolder: boolean;
+}
+
+export interface ChatInputRef {
+  send: () => void;
+  getReferencedFiles: () => ReferencedFile[];
 }
 
 interface ChatInputProps {
@@ -29,7 +34,7 @@ interface ChatInputProps {
   hideSendButton?: boolean;
 }
 
-export function ChatInput({
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
   value,
   onChange,
   onSend,
@@ -40,7 +45,7 @@ export function ChatInput({
   className,
   rows = 2,
   hideSendButton = false,
-}: ChatInputProps) {
+}, ref) => {
   const { fileTree } = useFileStore();
   const { textSelections, removeTextSelection, clearTextSelections } = useAIStore();
   const [showMention, setShowMention] = useState(false);
@@ -169,7 +174,7 @@ export function ChatInput({
   };
 
   // 发送消息
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!value.trim() && referencedFiles.length === 0 && textSelections.length === 0) return;
     if (isLoading || isStreaming) return;
     
@@ -186,7 +191,13 @@ export function ChatInput({
     onChange("");
     setReferencedFiles([]);
     clearTextSelections();
-  };
+  }, [value, referencedFiles, textSelections, isLoading, isStreaming, onSend, onChange, clearTextSelections]);
+
+  // 暴露方法给父组件
+  useImperativeHandle(ref, () => ({
+    send: handleSend,
+    getReferencedFiles: () => referencedFiles,
+  }), [handleSend, referencedFiles]);
 
   // 点击外部关闭菜单
   useEffect(() => {
@@ -256,9 +267,8 @@ export function ChatInput({
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          disabled={isStreaming}
-          className="flex-1 bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm resize-none outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50"
           rows={rows}
+          className="flex-1 resize-none bg-transparent outline-none text-sm"
         />
         
         {/* 附加文件按钮 */}
@@ -374,4 +384,6 @@ export function ChatInput({
 
     </div>
   );
-}
+});
+
+ChatInput.displayName = 'ChatInput';

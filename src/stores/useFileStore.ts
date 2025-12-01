@@ -34,7 +34,6 @@ export interface Tab {
   isolatedNode?: IsolatedNodeInfo; // 孤立视图的目标节点
   videoUrl?: string; // 视频笔记的 URL
   databaseId?: string; // 数据库 ID
-  pdfPath?: string; // PDF 文件路径
 }
 
 interface FileState {
@@ -714,7 +713,7 @@ export const useFileStore = create<FileState>()(
     const { tabs, activeTabIndex, currentContent, isDirty, undoStack, redoStack } = get();
     
     // 检查是否已有此 PDF 的标签页
-    const existingPdfIndex = tabs.findIndex(t => t.type === "pdf" && t.pdfPath === pdfPath);
+    const existingPdfIndex = tabs.findIndex(t => t.type === "pdf" && t.path === pdfPath);
     
     if (existingPdfIndex >= 0) {
       // 已有此 PDF 标签页，直接切换
@@ -734,7 +733,7 @@ export const useFileStore = create<FileState>()(
       set({
         tabs: updatedTabs,
         activeTabIndex: existingPdfIndex,
-        currentFile: null,
+        currentFile: pdfPath,
         currentContent: "",
         isDirty: false,
       });
@@ -742,8 +741,8 @@ export const useFileStore = create<FileState>()(
     }
     
     // 创建新 PDF 标签页
-    const fileName = pdfPath.split(/[/\\]/).pop() || "PDF";
-    const tabId = `__pdf_${Date.now()}__`;
+    const pdfName = pdfPath.split(/[/\\]/).pop() || "PDF";
+    const tabId = `__pdf_${pdfPath}__`;
     
     // 保存当前标签页状态
     let updatedTabs = [...tabs];
@@ -762,12 +761,11 @@ export const useFileStore = create<FileState>()(
       id: tabId,
       type: "pdf",
       path: pdfPath,
-      name: fileName,
+      name: pdfName,
       content: "",
       isDirty: false,
       undoStack: [],
       redoStack: [],
-      pdfPath: pdfPath,
     };
     
     updatedTabs.push(pdfTab);
@@ -775,7 +773,7 @@ export const useFileStore = create<FileState>()(
     set({
       tabs: updatedTabs,
       activeTabIndex: updatedTabs.length - 1,
-      currentFile: null,
+      currentFile: pdfPath,
       currentContent: "",
       isDirty: false,
     });

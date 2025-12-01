@@ -391,12 +391,12 @@ function App() {
               isActive={true}
             />
           </div>
-        ) : activeTab?.type === "pdf" && activeTab.pdfPath ? (
-          // PDF 标签页
-          <div className="flex-1 flex flex-col overflow-hidden bg-background">
-            <TabBar />
-            <PDFViewer filePath={activeTab.pdfPath} className="flex-1" />
-          </div>
+        ) : activeTab?.type === "pdf" && activeTab.path ? (
+        // PDF 标签页
+        <div className="flex-1 flex flex-col overflow-hidden bg-background">
+          <TabBar />
+          <PDFViewer filePath={activeTab.path} className="flex-1" />
+        </div>
         ) : splitView && currentFile ? (
           // Show split editor when enabled
           <SplitEditor />

@@ -67,65 +67,48 @@ export function PDFThumbnails({
 
   if (!pdfData) {
     return (
-      <div className={cn("w-32 flex items-center justify-center border-r border-border bg-muted/30", className)}>
+      <div className={cn("flex items-center justify-center p-4", className)}>
         <Loader2 className="animate-spin" size={16} />
       </div>
     );
   }
 
   return (
-    <div className={cn("w-32 flex flex-col border-r border-border bg-muted/30", className)}>
-      {/* 头部 */}
-      <div className="h-8 flex items-center justify-between px-2 border-b border-border shrink-0">
-        <span className="text-xs text-muted-foreground">缩略图</span>
-        {onToggle && (
-          <button
-            onClick={onToggle}
-            className="p-0.5 hover:bg-accent rounded transition-colors"
-            title="收起缩略图"
+    <div className={cn("flex-1 overflow-y-auto py-2 px-2 space-y-2", className)}>
+      <Document
+        file={{ data: pdfData }}
+        loading={null}
+        error={null}
+      >
+        {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
+          <div
+            key={pageNum}
+            id={`pdf-thumb-${pageNum}`}
+            onClick={() => onPageClick(pageNum)}
+            className={cn(
+              "cursor-pointer rounded overflow-hidden border-2 transition-all",
+              currentPage === pageNum
+                ? "border-primary shadow-md"
+                : "border-transparent hover:border-primary/50"
+            )}
           >
-            <ChevronLeft size={14} />
-          </button>
-        )}
-      </div>
-
-      {/* 缩略图列表 */}
-      <div className="flex-1 overflow-y-auto py-2 px-2 space-y-2">
-        <Document
-          file={{ data: pdfData }}
-          loading={null}
-          error={null}
-        >
-          {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
-            <div
-              key={pageNum}
-              id={`pdf-thumb-${pageNum}`}
-              onClick={() => onPageClick(pageNum)}
-              className={cn(
-                "cursor-pointer rounded overflow-hidden border-2 transition-all",
-                currentPage === pageNum
-                  ? "border-primary shadow-md"
-                  : "border-transparent hover:border-primary/50"
-              )}
-            >
-              <Page
-                pageNumber={pageNum}
-                width={100}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                loading={
-                  <div className="w-[100px] h-[140px] flex items-center justify-center bg-muted">
-                    <Loader2 className="animate-spin" size={12} />
-                  </div>
-                }
-              />
-              <div className="text-center text-xs py-1 bg-background/80">
-                {pageNum}
-              </div>
+            <Page
+              pageNumber={pageNum}
+              width={100}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              loading={
+                <div className="w-[100px] h-[140px] flex items-center justify-center bg-muted">
+                  <Loader2 className="animate-spin" size={12} />
+                </div>
+              }
+            />
+            <div className="text-center text-xs py-1 bg-background/80">
+              {pageNum}
             </div>
-          ))}
-        </Document>
-      </div>
+          </div>
+        ))}
+      </Document>
     </div>
   );
 }
