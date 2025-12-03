@@ -6,6 +6,7 @@
 import { ToolExecutor, ToolResult, ToolContext } from "../../types";
 import { writeFile, exists, createDir } from "@/lib/tauri";
 import { join, dirname } from "@/lib/path";
+import { useFileStore } from "@/stores/useFileStore";
 
 export const CreateNoteTool: ToolExecutor = {
   name: "create_note",
@@ -67,6 +68,9 @@ export const CreateNoteTool: ToolExecutor = {
 
       // 写入文件
       await writeFile(fullPath, content);
+
+      // 刷新文件树，让左侧面板和知识图谱及时更新
+      await useFileStore.getState().refreshFileTree();
 
       return {
         success: true,

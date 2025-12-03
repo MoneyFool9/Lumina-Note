@@ -8,6 +8,7 @@ export type {
   LLMConfig,
   LLMOptions,
   LLMResponse,
+  LLMToolCall,
   LLMUsage,
   LLMProvider,
   LLMProviderType,
@@ -49,6 +50,7 @@ export { createProvider } from "./factory";
 
 /**
  * 调用 LLM (统一入口)
+ * 包含重试机制，应对 HTTP/2 协议错误等临时性网络问题
  */
 export async function callLLM(
   messages: Message[],
@@ -57,21 +59,44 @@ export async function callLLM(
 ): Promise<LLMResponse> {
   console.log('[AI Debug] callLLM() called with', messages.length, 'messages');
   
-  try {
-    const provider = createProvider(configOverride);
-    const config = getLLMConfig();
-    const finalOptions = {
-      ...options,
-      temperature: options?.temperature ?? config.temperature,
-    };
-    console.log('[AI Debug] Provider created, calling provider.call()');
-    const response = await provider.call(messages, finalOptions);
-    console.log('[AI Debug] Provider.call() returned successfully');
-    return response;
-  } catch (error) {
-    console.error('[AI Debug] Error in callLLM():', error);
-    throw error;
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000;
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const provider = createProvider(configOverride);
+      const config = getLLMConfig();
+      const finalOptions = {
+        ...options,
+        temperature: options?.temperature ?? config.temperature,
+      };
+      console.log('[AI Debug] Provider created, calling provider.call()');
+      const response = await provider.call(messages, finalOptions);
+      console.log('[AI Debug] Provider.call() returned successfully');
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error('[AI Debug] Error in callLLM():', lastError);
+      
+      // 检查是否是可重试的网络错误
+      const isRetryable = 
+        lastError.message.includes("Failed to fetch") ||
+        lastError.message.includes("HTTP2") ||
+        lastError.message.includes("network") ||
+        lastError.message.includes("ECONNRESET");
+      
+      if (isRetryable && attempt < MAX_RETRIES) {
+        console.warn(`[LLM] 请求失败 (尝试 ${attempt}/${MAX_RETRIES})，${RETRY_DELAY}ms 后重试...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        continue;
+      }
+      
+      throw lastError;
+    }
   }
+  
+  throw lastError || new Error("未知错误");
 }
 
 /**
@@ -90,9 +115,12 @@ export async function* callLLMStream(
     temperature: options?.temperature ?? config.temperature,
   };
   
+  console.log('[AI Debug] callLLMStream - provider.stream exists:', !!provider.stream);
+  
   // 检查 Provider 是否支持流式
   if (!provider.stream) {
     // 降级：不支持流式的 Provider 一次性返回
+    console.log('[AI Debug] callLLMStream - falling back to non-streaming');
     const response = await provider.call(messages, finalOptions);
     yield { type: "text", text: response.content };
     if (response.usage) {
@@ -107,5 +135,6 @@ export async function* callLLMStream(
   }
   
   // 使用 Provider 的流式方法
+  console.log('[AI Debug] callLLMStream - using provider.stream()');
   yield* provider.stream(messages, finalOptions);
 }

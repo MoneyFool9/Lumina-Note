@@ -59,15 +59,13 @@ pub fn list_dir_recursive(path: &str) -> Result<Vec<FileEntry>, AppError> {
 
         if path.is_dir() {
             let children = list_dir_recursive(&path.to_string_lossy())?;
-            // Include all non-empty directories
-            if !children.is_empty() {
-                entries.push(FileEntry {
-                    name,
-                    path: path.to_string_lossy().to_string(),
-                    is_dir: true,
-                    children: Some(children),
-                });
-            }
+            // Include all directories (including empty ones)
+            entries.push(FileEntry {
+                name,
+                path: path.to_string_lossy().to_string(),
+                is_dir: true,
+                children: Some(children),
+            });
         } else {
             // Include all files
             entries.push(FileEntry {

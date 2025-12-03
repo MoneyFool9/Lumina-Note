@@ -5,6 +5,7 @@
 import { ToolExecutor, ToolResult, ToolContext } from "../../types";
 import { exists, createDir } from "@/lib/tauri";
 import { join } from "@/lib/path";
+import { useFileStore } from "@/stores/useFileStore";
 
 export const CreateFolderTool: ToolExecutor = {
   name: "create_folder",
@@ -43,6 +44,9 @@ export const CreateFolderTool: ToolExecutor = {
 
       // 创建目录
       await createDir(fullPath, { recursive: true });
+
+      // 刷新文件树
+      await useFileStore.getState().refreshFileTree();
 
       return {
         success: true,

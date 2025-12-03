@@ -5,6 +5,7 @@
 import { ToolExecutor, ToolResult, ToolContext } from "../../types";
 import { exists, rename, createDir } from "@/lib/tauri";
 import { join, dirname } from "@/lib/path";
+import { useFileStore } from "@/stores/useFileStore";
 
 export const MoveFileTool: ToolExecutor = {
   name: "move_file",
@@ -63,6 +64,9 @@ export const MoveFileTool: ToolExecutor = {
 
       // 执行移动
       await rename(fromPath, toPath);
+
+      // 刷新文件树
+      await useFileStore.getState().refreshFileTree();
 
       return {
         success: true,

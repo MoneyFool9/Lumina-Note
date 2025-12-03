@@ -60,6 +60,7 @@ interface AgentState {
   status: AgentStatus;
   messages: Message[];
   pendingTool: ToolCall | null;
+  lastAutoApprovedTool: ToolCall | null;  // 最近被自动审批的工具
   currentTask: string | null;
   lastError: string | null;
   lastIntent: Intent | null;
@@ -153,6 +154,7 @@ export const useAgentStore = create<AgentState>()(
         status: "idle",
         messages: [],
         pendingTool: null,
+        lastAutoApprovedTool: null,
         currentTask: null,
         lastError: null,
         lastIntent: null,
@@ -585,10 +587,18 @@ export const useAgentStore = create<AgentState>()(
             };
           });
 
-          // 自动审批检查
-          const { autoApprove, pendingTool } = get();
-          if (autoApprove && pendingTool && loopState.status === "waiting_approval") {
+          // 自动审批检查（直接使用 loopState 避免时序问题）
+          const { autoApprove } = get();
+          if (autoApprove && loopState.pendingTool && loopState.status === "waiting_approval") {
+            console.log("[Agent] 自动审批工具调用:", loopState.pendingTool.name);
+            // 记录被自动审批的工具，用于 UI 显示（保持显示直到任务完成）
+            set({ lastAutoApprovedTool: loopState.pendingTool });
             get().approve();
+          }
+          
+          // 任务完成或出错时清除自动审批标记
+          if (loopState.status === "completed" || loopState.status === "error" || loopState.status === "idle") {
+            set({ lastAutoApprovedTool: null });
           }
         },
       };

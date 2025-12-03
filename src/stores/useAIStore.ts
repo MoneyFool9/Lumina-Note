@@ -13,8 +13,9 @@ import {
   getAIConfig,
 } from "@/lib/ai";
 import { readFile } from "@/lib/tauri";
-import { callLLM } from "@/services/llm";
+import { callLLMStream } from "@/services/llm";
 import { encryptApiKey, decryptApiKey } from "@/lib/crypto";
+// 流式状态现在完全由 Zustand 管理，不再需要额外的 streamingStore
 
 // Pending diff for preview
 export interface PendingDiff {
@@ -138,28 +139,13 @@ export const useAIStore = create<AIState>()(
       // Config
       config: getAIConfig(),
       setConfig: async (newConfig) => {
-        console.log('[AI Debug] setConfig called', {
-          hasApiKey: newConfig.apiKey !== undefined,
-          provider: newConfig.provider,
-          model: newConfig.model,
-        });
-        
         // 如果有新的 apiKey，先加密
         if (newConfig.apiKey !== undefined) {
-          console.log('[AI Debug] Encrypting API key, original length:', newConfig.apiKey.length);
           const encryptedKey = await encryptApiKey(newConfig.apiKey);
-          console.log('[AI Debug] Encrypted key length:', encryptedKey.length);
-          
           newConfig = { ...newConfig, apiKey: newConfig.apiKey }; // 内存中保持明文
-          // 同步到内存配置
           setAIConfig(newConfig);
-          console.log('[AI Debug] Set in-memory config with plain key');
-          
           // 存储时使用加密的 key
-          set({ 
-            config: { ...getAIConfig(), apiKey: encryptedKey } 
-          });
-          console.log('[AI Debug] Stored encrypted key to persist');
+          set({ config: { ...getAIConfig(), apiKey: encryptedKey } });
         } else {
           setAIConfig(newConfig);
           set({ config: getAIConfig() });
@@ -298,18 +284,7 @@ export const useAIStore = create<AIState>()(
         // 使用内存中的配置（已解密），而不是 store 中可能未同步的配置
         const config = getAIConfig();
 
-        console.log('[AI Debug] sendMessage called', {
-          contentLength: content.length,
-          hasCurrentFile: !!currentFile,
-          referencedFilesCount: referencedFiles.length,
-          provider: config.provider,
-          model: config.model,
-          hasApiKey: !!config.apiKey,
-          apiKeyLength: config.apiKey?.length || 0,
-        });
-
         if (!config.apiKey && config.provider !== "ollama") {
-          console.error('[AI Debug] No API key configured');
           set({ error: "请先在设置中配置 API Key" });
           return;
         }
@@ -371,15 +346,6 @@ export const useAIStore = create<AIState>()(
             filesToSend = [currentFile];
           }
 
-          console.log('[AI Debug] Calling AI with:', {
-            messagesCount: get().messages.length,
-            filesToSendCount: filesToSend.length,
-            provider: config.provider,
-            model: config.model,
-          });
-
-          console.log('[AI Debug] About to call chat()...');
-          
           // 准备配置覆盖 (如果启用了路由且配置了聊天模型)
           let configOverride: Partial<AIConfig> | undefined = undefined;
           if (config.routing?.enabled && config.routing.chatProvider) {
@@ -403,20 +369,12 @@ export const useAIStore = create<AIState>()(
               configOverride,
               { intent: "chat" }
             );
-            console.log('[AI Debug] chat() returned successfully');
           } catch (chatError) {
-            console.error('[AI Debug] chat() threw error:', chatError);
             throw chatError;
           }
 
-          console.log('[AI Debug] AI response received:', {
-            contentLength: response.content?.length || 0,
-            hasUsage: !!response.usage,
-          });
-
           // Parse edit suggestions from content
           const edits = parseEditSuggestions(response.content);
-          console.log("[AI] Parsed edits:", edits);
 
           // Update token usage
           const newUsage = response.usage ? {
@@ -425,23 +383,11 @@ export const useAIStore = create<AIState>()(
             total: response.usage.total_tokens,
           } : { prompt: 0, completion: 0, total: 0 };
 
-          console.log('[AI Debug] Adding assistant message to state:', {
-            contentLength: response.content.length,
-            contentPreview: response.content.substring(0, 100),
-            editsCount: edits.length,
-          });
-
           // Add assistant message and update tokens
           set((state) => {
             const assistantMessage: Message = { role: "assistant", content: response.content };
             const newMessages = [...state.messages, assistantMessage];
             const newTitle = generateTitleFromAssistantContent(response.content, "新对话");
-            
-            console.log('[AI Debug] State update:', {
-              oldMessagesCount: state.messages.length,
-              newMessagesCount: newMessages.length,
-              sessionId: state.currentSessionId,
-            });
             
             return {
               messages: newMessages,
@@ -472,20 +418,7 @@ export const useAIStore = create<AIState>()(
             ) || filesToSend[0];
             
             if (file && file.content && file.path) {
-              console.log("=== DEBUG: Auto Diff ===");
-              console.log("[1] File name:", file.name);
-              console.log("[2] File path:", file.path);
-              console.log("[3] File content (first 200 chars):", file.content.substring(0, 200));
-              console.log("[4] Edit filePath:", edit.filePath);
-              console.log("[5] Edit originalContent:", edit.originalContent);
-              console.log("[6] Edit newContent:", edit.newContent);
-              console.log("[7] Does file contain originalContent?", file.content.includes(edit.originalContent));
-              
               const modified = applyEdit(file.content, edit);
-              console.log("[8] Modified length:", modified.length, "Original length:", file.content.length);
-              console.log("[9] Content changed:", modified !== file.content);
-              console.log("[10] Modified (first 200 chars):", modified.substring(0, 200));
-              
               if (modified !== file.content) {
                 // Capture values for closure
                 const diffData = {
@@ -554,9 +487,8 @@ export const useAIStore = create<AIState>()(
           };
         });
 
-        // 短暂延迟后再显示 streaming 状态
-        await new Promise(resolve => setTimeout(resolve, 150));
-        set({ isStreaming: true });
+        // 重置流式内容并开始流式状态
+        set({ isStreaming: true, streamingContent: "", streamingReasoning: "" });
 
         if (!config.apiKey && config.provider !== "ollama") {
           set({ error: "请先在设置中配置 API Key" });
@@ -605,36 +537,46 @@ export const useAIStore = create<AIState>()(
                customModelId: config.routing.chatCustomModelId,
                baseUrl: config.routing.chatBaseUrl,
              };
-             console.log('[AI] Using chat model:', configOverride.model);
           }
 
-          // 使用 callLLM 而不是 callLLMStream（与 Agent 模式保持一致）
-          console.log('[AI Debug] Calling callLLM with messages:', llmMessages.length);
+          // 使用流式调用
+          let finalContent = "";
+          let reasoningContent = "";
           
-          const response = await callLLM(llmMessages, undefined, configOverride);
-          console.log('[AI Debug] callLLM response:', {
-            contentLength: response.content?.length || 0,
-            hasUsage: !!response.usage,
-          });
-
-          const finalContent = response.content || "";
-          
-          // Update token usage
-          if (response.usage) {
-            set((state) => ({
-              tokenUsage: {
-                prompt: response.usage!.promptTokens,
-                completion: response.usage!.completionTokens,
-                total: response.usage!.totalTokens,
-              },
-              totalTokensUsed: state.totalTokensUsed + response.usage!.totalTokens,
-            }));
+          // 流式接收内容
+          for await (const chunk of callLLMStream(llmMessages, undefined, configOverride)) {
+            if (chunk.type === "text") {
+              finalContent += chunk.text;
+              // 直接更新 Zustand 状态
+              set({ streamingContent: finalContent });
+            } else if (chunk.type === "reasoning") {
+              reasoningContent += chunk.text;
+              // reasoning 暂时也放到 streamingContent 里显示
+              set({ streamingContent: `<thinking>\n${reasoningContent}\n</thinking>` });
+            } else if (chunk.type === "usage") {
+              // Update token usage
+              set((state) => ({
+                tokenUsage: {
+                  prompt: chunk.inputTokens || 0,
+                  completion: chunk.outputTokens || 0,
+                  total: chunk.totalTokens || 0,
+                },
+                totalTokensUsed: state.totalTokensUsed + (chunk.totalTokens || 0),
+              }));
+            } else if (chunk.type === "error") {
+              throw new Error(chunk.error);
+            }
           }
-
+          
+          // 如果有 reasoning content，添加到最终内容前面
+          if (reasoningContent) {
+            finalContent = `<thinking>\n${reasoningContent}\n</thinking>\n\n${finalContent}`;
+          }
+          
           // Parse edit suggestions from content
           const edits = parseEditSuggestions(finalContent);
-          console.log("[AI] Parsed edits:", edits);
 
+          // 结束流式状态并添加消息（合并为一次更新，避免切换闪烁）
           set((state) => {
             const assistantMessage: Message = { role: "assistant", content: finalContent };
             const newMessages = [...state.messages, assistantMessage];
@@ -764,30 +706,16 @@ export const useAIStore = create<AIState>()(
         currentSessionId: state.currentSessionId,
       }),
       onRehydrateStorage: () => async (state) => {
-        console.log('[AI Debug] Rehydrating storage...');
         // 恢复数据后，解密 apiKey 并同步 config 到内存
         if (state?.config) {
-          console.log('[AI Debug] Stored config:', {
-            provider: state.config.provider,
-            model: state.config.model,
-            encryptedKeyLength: state.config.apiKey?.length || 0,
-          });
-          
           try {
             const decryptedKey = await decryptApiKey(state.config.apiKey || "");
-            console.log('[AI Debug] Decrypted key length:', decryptedKey.length);
-            
             const decryptedConfig = { ...state.config, apiKey: decryptedKey };
             setAIConfig(decryptedConfig);
-            // 更新 store 中的明文配置（仅内存，不触发 persist）
             useAIStore.setState({ config: decryptedConfig });
-            
-            console.log('[AI Debug] Config rehydrated successfully');
           } catch (error) {
-            console.error('[AI Debug] Failed to decrypt API key:', error);
+            console.error('Failed to decrypt API key:', error);
           }
-        } else {
-          console.log('[AI Debug] No config to rehydrate');
         }
       },
     }

@@ -24,7 +24,7 @@ export const MODES: Record<AgentModeSlug, AgentMode> = {
     icon: "folder",
     roleDefinition: "你是一个笔记整理专家，擅长分析笔记结构、建议分类方案、执行批量重组、优化目录组织。你也可以管理数据库。",
     tools: [
-      "read_note", "delete_note", "move_note", "create_folder",
+      "read_note", "delete_note", "move_file", "rename_file", "create_folder",
       "list_notes", "search_notes", "grep_search",
       "query_database", "add_database_row",
       "get_backlinks", "ask_user", "attempt_completion"

@@ -170,9 +170,15 @@ CAPABILITIES
 
 你不能：
 1. 访问笔记库之外的文件
-2. 执行系统命令
+2. 执行系统命令（禁止输出 bash/shell/cmd 命令）
 3. 访问网络资源
-4. 修改非 Markdown 文件`;
+4. 修改非 Markdown 文件
+
+**严重警告：禁止幻觉**
+- 你没有终端环境，不能执行 bash/shell 命令
+- 不要在 attempt_completion 中放代码块来"假装执行"
+- 只能使用 TOOLS 部分列出的工具
+- 如果需要查看目录结构，使用 list_notes 工具`;
   }
 
   private getRulesSection(context: TaskContext): string {
@@ -211,6 +217,34 @@ RULES
 - 当用户要求创作内容（如文章、计划、报告）时，**必须**使用 create_note 将内容保存为文件，而不是直接输出在对话中。
 - 除非用户明确要求"只在对话框中显示"或"不保存"。
 - 创建文件后，使用 attempt_completion 告知用户文件已创建。`;
+    }
+
+    // 针对 Organizer 模式的特殊规则
+    if (context.mode?.slug === "organizer") {
+      baseRules += `
+
+# 整理大师特别规则
+
+**整理任务的标准工作流**：
+
+1. **第一步：必须先用 list_notes 查看目录结构**
+   <list_notes>
+   <directory>目标目录</directory>
+   </list_notes>
+
+2. **第二步：分析现有结构，制定整理方案**
+
+3. **第三步：使用工具执行整理**
+   - move_file: 移动文件
+   - create_folder: 创建新目录
+   - delete_note: 删除文件
+   - rename_file: 重命名
+
+4. **最后：用 attempt_completion 报告结果**
+
+**禁止**：
+- 不使用工具就直接给出整理建议
+- 在 attempt_completion 中输出 bash/shell 命令`;
     }
 
     return baseRules;

@@ -87,15 +87,25 @@ function parseToolParams(content: string): Record<string, unknown> {
 
 /**
  * 格式化工具结果为消息
+ * 对内容长度进行限制，避免请求体过大导致 HTTP/2 协议错误
  */
 export function formatToolResult(toolCall: ToolCall, result: { success: boolean; content: string; error?: string }): string {
+  const MAX_CONTENT_LENGTH = 8000; // 单个工具结果最大字符数
+  
+  let content = result.success ? result.content : (result.error || result.content);
+  
+  // 截断过长的内容
+  if (content.length > MAX_CONTENT_LENGTH) {
+    content = content.slice(0, MAX_CONTENT_LENGTH) + `\n\n... [内容已截断，原长度: ${result.content.length} 字符]`;
+  }
+  
   if (result.success) {
     return `<tool_result name="${toolCall.name}">
-${result.content}
+${content}
 </tool_result>`;
   } else {
     return `<tool_error name="${toolCall.name}">
-${result.error || result.content}
+${content}
 </tool_error>`;
   }
 }

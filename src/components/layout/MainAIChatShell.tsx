@@ -118,21 +118,20 @@ export function MainAIChatShell() {
     lastIntent,
   } = useAgentStore();
   
-  // Chat store
-  const {
-    messages: chatMessages,
-    sessions: chatSessions,
-    currentSessionId: chatSessionId,
-    createSession: createChatSession,
-    switchSession: switchChatSession,
-    deleteSession: deleteChatSession,
-    isLoading: chatLoading,
-    isStreaming: chatStreaming,
-    sendMessageStream,
-    stopStreaming,
-    checkFirstLoad: checkChatFirstLoad,
-    config,
-  } = useAIStore();
+  // Chat store - 使用 selector 确保状态变化时正确重新渲染
+  const chatMessages = useAIStore((state) => state.messages);
+  const chatSessions = useAIStore((state) => state.sessions);
+  const chatSessionId = useAIStore((state) => state.currentSessionId);
+  const createChatSession = useAIStore((state) => state.createSession);
+  const switchChatSession = useAIStore((state) => state.switchSession);
+  const deleteChatSession = useAIStore((state) => state.deleteSession);
+  const chatLoading = useAIStore((state) => state.isLoading);
+  const chatStreaming = useAIStore((state) => state.isStreaming);
+  const streamingContent = useAIStore((state) => state.streamingContent);
+  const sendMessageStream = useAIStore((state) => state.sendMessageStream);
+  const stopStreaming = useAIStore((state) => state.stopStreaming);
+  const checkChatFirstLoad = useAIStore((state) => state.checkFirstLoad);
+  const config = useAIStore((state) => state.config);
 
   useRAGStore();
   useAgentStore();
@@ -180,9 +179,10 @@ export function MainAIChatShell() {
   }, [allFiles, filePickerQuery]);
 
   // 判断是否有对话历史（用于控制动画状态）
+  // Chat 模式下，流式进行中也算已开始（确保流式消息能正确显示）
   const hasStarted = chatMode === "agent"
     ? agentMessages.length > 0
-    : chatMessages.length > 0;
+    : chatMessages.length > 0 || chatStreaming;
 
   // 获取当前消息列表
   const messages = chatMode === "agent" ? agentMessages : chatMessages;
@@ -747,8 +747,8 @@ export function MainAIChatShell() {
               </motion.div>
             )}
 
-            {/* 打字指示器 */}
-            {isLoading && (
+            {/* 打字指示器 - 仅 Agent 模式使用，Chat 模式使用 TypingIndicator 组件 */}
+            {chatMode === "agent" && isLoading && (
               <motion.div 
                 initial={{ opacity: 0 }} 
                 animate={{ opacity: 1 }}
@@ -764,6 +764,39 @@ export function MainAIChatShell() {
                 </div>
               </motion.div>
             )}
+            
+            {/* Chat 模式的流式消息 - 直接渲染在消息列表中，使用相同样式 */}
+            {chatMode === "chat" && chatStreaming && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-3 mb-6"
+              >
+                <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shrink-0">
+                  <Bot size={16} className="text-muted-foreground" />
+                </div>
+                <div className="max-w-[80%] text-foreground">
+                  {streamingContent ? (
+                    <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+                      <span dangerouslySetInnerHTML={{ __html: parseMarkdown(streamingContent) }} />
+                      {/* 闪烁光标 */}
+                      <span 
+                        className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle animate-pulse"
+                        style={{ animationDuration: '1s' }}
+                      />
+                    </div>
+                  ) : (
+                    /* 等待首个 token 时的打字指示器 */
+                    <div className="flex items-center gap-1 h-6">
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                      <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+            
             <div ref={messagesEndRef} />
             </div>
           </div>

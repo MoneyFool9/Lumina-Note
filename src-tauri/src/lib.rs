@@ -2,10 +2,12 @@ mod commands;
 mod error;
 mod fs;
 mod vector_db;
+mod llm;
 
 pub use commands::*;
 pub use error::*;
 pub use fs::*;
+pub use llm::*;
 
 // Re-export vector_db items explicitly to avoid shadowing
 pub use vector_db::{

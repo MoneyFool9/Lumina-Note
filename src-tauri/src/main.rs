@@ -7,6 +7,7 @@ mod commands;
 mod fs;
 mod error;
 mod vector_db;
+mod llm;
 
 #[cfg(debug_assertions)]
 use tauri::Manager;
@@ -48,6 +49,12 @@ fn main() {
             vector_db::get_vector_index_status,
             vector_db::check_file_needs_reindex,
             vector_db::clear_vector_index,
+            // LLM HTTP client
+            llm::llm_fetch,
+            llm::llm_fetch_stream,
+            // Debug logging
+            llm::append_debug_log,
+            llm::get_debug_log_path,
         ])
         .setup(|_app| {
             #[cfg(debug_assertions)]

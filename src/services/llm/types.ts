@@ -93,12 +93,20 @@ export interface LLMOptions {
   signal?: AbortSignal;
   temperature?: number;
   maxTokens?: number;
+  tools?: unknown[];  // Function Calling 工具定义
 }
 
 // ============ LLM 响应 ============
 
+export interface LLMToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
 export interface LLMResponse {
   content: string;
+  toolCalls?: LLMToolCall[];  // Function Calling 模式下的工具调用
   usage?: LLMUsage;
 }
 

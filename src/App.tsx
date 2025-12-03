@@ -24,6 +24,12 @@ import { useAIStore } from "@/stores/useAIStore";
 import { saveFile } from "@/lib/tauri";
 import { TitleBar } from "@/components/layout/TitleBar";
 import { VoiceInputBall } from "@/components/ai/VoiceInputBall";
+import { enableDebugLogger } from "@/lib/debugLogger";
+
+// 启用调试日志收集（开发模式下）
+if (import.meta.env.DEV) {
+  enableDebugLogger();
+}
 
 // Component that shows tabs + graph/editor content
 function EditorWithGraph() {

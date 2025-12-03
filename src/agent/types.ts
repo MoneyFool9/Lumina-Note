@@ -8,7 +8,8 @@ import type { Message, LLMConfig } from "@/services/llm";
 export type { 
   Message, 
   LLMOptions, 
-  LLMResponse, 
+  LLMResponse,
+  LLMToolCall,
   LLMProvider,
   LLMConfig,
   LLMProviderType,

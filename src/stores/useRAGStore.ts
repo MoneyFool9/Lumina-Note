@@ -221,7 +221,10 @@ export const useRAGStore = create<RAGState>()(
             decryptedConfig.rerankerApiKey = await decryptApiKey(state.config.rerankerApiKey);
           }
           
-          useRAGStore.setState({ config: decryptedConfig });
+          // 延迟执行，确保 store 创建完成后再调用 setState
+          setTimeout(() => {
+            useRAGStore.setState({ config: decryptedConfig });
+          }, 0);
         }
       },
     }

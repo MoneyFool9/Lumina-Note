@@ -24,6 +24,7 @@ import { PromptBuilder } from "../prompts/PromptBuilder";
 import { ToolRegistry } from "../tools/ToolRegistry";
 import { callLLM } from "../providers";
 import { useRAGStore } from "@/stores/useRAGStore";
+import { getToolSchemas } from "../tools/schemas";
 
 const MAX_CONSECUTIVE_ERRORS = 3;
 
@@ -73,7 +74,7 @@ export class AgentLoop {
 
     if (hasHistory) {
       // 保留历史，更新 system prompt，添加新用户消息
-      const newMessages = existingMessages.map((msg, i) => 
+      let newMessages = existingMessages.map((msg, i) => 
         i === 0 && msg.role === "system" 
           ? { role: "system" as const, content: systemPrompt }
           : msg
@@ -150,34 +151,50 @@ export class AgentLoop {
       !this.abortController?.signal.aborted
     ) {
       try {
-        // 1. 调用 LLM
         const messages = this.stateManager.getMessages();
-        const response = await this.callLLM(messages);
+        
+        // 1. 获取当前模式可用的工具名称
+        const toolNames = context.mode?.tools || [];
+        
+        // 2. 调用 LLM（传入工具用于 FC 模式）
+        const response = await this.callLLM(messages, toolNames);
 
-        // 2. 解析响应
-        const parsedResponse = parseResponse(response.content);
+        // 3. 优先使用 FC 响应中的 toolCalls，否则回退到 XML 解析
+        let toolCalls: ToolCall[];
+        let isCompletion = false;
+        
+        if (response.toolCalls && response.toolCalls.length > 0) {
+          // FC 模式：直接使用结构化的工具调用
+          toolCalls = response.toolCalls.map(tc => ({
+            name: tc.name,
+            params: tc.arguments,
+            raw: JSON.stringify(tc),
+          }));
+          isCompletion = toolCalls.some(tc => tc.name === "attempt_completion");
+          console.log("[Agent] 使用 Function Calling 模式，工具调用:", toolCalls.map(tc => tc.name));
+        } else {
+          // XML 解析模式：从文本中解析工具调用
+          const parsedResponse = parseResponse(response.content);
+          toolCalls = parsedResponse.toolCalls;
+          isCompletion = parsedResponse.isCompletion;
+        }
 
-        // 3. 添加 assistant 消息
+        // 4. 添加 assistant 消息
         this.stateManager.addMessage({
           role: "assistant",
           content: response.content,
         });
 
-        // 4. 处理工具调用
-        if (parsedResponse.toolCalls.length > 0) {
-          // 检查是否包含 attempt_completion
-          const hasCompletion = parsedResponse.toolCalls.some(
-            (tc) => tc.name === "attempt_completion"
-          );
-
-          await this.handleToolCalls(parsedResponse.toolCalls, context);
+        // 5. 处理工具调用
+        if (toolCalls.length > 0) {
+          await this.handleToolCalls(toolCalls, context);
 
           // 如果调用了 attempt_completion，任务完成，退出循环
-          if (hasCompletion || parsedResponse.isCompletion) {
+          if (isCompletion) {
             this.stateManager.setStatus("completed");
             break;
           }
-        } else if (parsedResponse.isCompletion) {
+        } else if (isCompletion) {
           // 任务完成（无工具调用但有完成标记）
           this.stateManager.setStatus("completed");
           break;
@@ -259,11 +276,17 @@ export class AgentLoop {
 
   /**
    * 调用 LLM
+   * 支持 Function Calling 模式（DeepSeek/OpenAI 等）
    */
-  private async callLLM(messages: Message[]): Promise<LLMResponse> {
+  private async callLLM(messages: Message[], toolNames?: string[]): Promise<LLMResponse> {
     const configOverride = this.stateManager.getLLMConfig();
+    
+    // 获取工具 schemas 用于 FC 模式
+    const tools = toolNames ? getToolSchemas(toolNames) : undefined;
+    
     return callLLM(messages, {
       signal: this.abortController?.signal,
+      tools,
     }, configOverride);
   }
 

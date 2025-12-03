@@ -13,7 +13,6 @@ import {
   Send,
   X,
   FileText,
-  Loader2,
   Mic,
   MicOff,
   RefreshCw,
@@ -100,6 +99,7 @@ export function ChatPanel({ compact = false }: ChatPanelProps) {
     messages, 
     isLoading, 
     isStreaming,
+    streamingContent,
     error, 
     referencedFiles,
     pendingEdits,
@@ -263,11 +263,27 @@ export function ChatPanel({ compact = false }: ChatPanelProps) {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Streaming / Loading - 使用和普通消息相同的样式 */}
         {(isLoading || isStreaming) && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 size={14} className="animate-spin" />
-            <span>思考中...</span>
+          <div>
+            {streamingContent ? (
+              <div 
+                className="text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none [&_*]:!text-xs [&_h1]:!text-base [&_h2]:!text-sm [&_h3]:!text-xs"
+              >
+                <span dangerouslySetInnerHTML={{ __html: parseMarkdown(streamingContent) }} />
+                {/* 闪烁光标 | */}
+                <span 
+                  className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-middle animate-pulse"
+                  style={{ animationDuration: '1s' }}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 h-6">
+                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+              </div>
+            )}
           </div>
         )}
 
