@@ -7,7 +7,7 @@
  * - 最终回答：正常大字体，Markdown 渲染
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseMarkdown } from "@/lib/markdown";
 import { Message } from "@/agent/types";
@@ -21,6 +21,8 @@ import {
   Loader2,
   Bot,
   Copy,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 
 // ============ 类型定义 ============
@@ -89,7 +91,9 @@ function parseAssistantMessage(content: string, toolResults: Map<string, { resul
     const tagName = match[1];
     if (!nonToolTags.includes(tagName.toLowerCase())) {
       const params = match[2].trim();
-      const resultData = toolResults.get(tagName);
+      // 先尝试用精确 key 匹配，再回退到工具名
+      const key = getToolCallKey(tagName, params);
+      const resultData = toolResults.get(key) || toolResults.get(tagName);
       
       toolCalls.push({
         name: tagName,
@@ -179,7 +183,27 @@ function getToolSummary(name: string, params: string, result?: string): string {
 }
 
 /**
+ * 生成工具调用的唯一标识（工具名 + 参数摘要）
+ */
+function getToolCallKey(name: string, params: string): string {
+  // 提取参数中的关键信息作为签名
+  // 格式化方式与后端 formatToolResult 保持一致
+  const signature = params
+    .replace(/\s+/g, " ")
+    .slice(0, 100);
+  return `${name}::${signature}`;
+}
+
+/**
+ * 解码 HTML 实体（用于匹配后端转义的 params）
+ */
+function decodeHtmlEntities(str: string): string {
+  return str.replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+}
+
+/**
  * 从所有消息中收集工具执行结果
+ * 使用 工具名::参数摘要 作为唯一 key
  */
 function collectToolResults(messages: Message[]): Map<string, { result: string; success: boolean }> {
   const toolResults = new Map<string, { result: string; success: boolean }>();
@@ -187,17 +211,34 @@ function collectToolResults(messages: Message[]): Map<string, { result: string; 
   messages.forEach(msg => {
     const content = msg.content;
     
-    // 提取 tool_result
-    const resultRegex = /<tool_result name="([^"]+)">([\s\S]*?)<\/tool_result>/g;
+    // 提取 tool_result：<tool_result name="xxx" params="...">结果</tool_result>
+    // 或旧格式：<tool_result name="xxx">结果</tool_result>
+    const resultRegex = /<tool_result name="([^"]+)"(?:\s+params="([^"]*)")?>([\s\S]*?)<\/tool_result>/g;
     let match;
     while ((match = resultRegex.exec(content)) !== null) {
-      toolResults.set(match[1], { result: match[2].trim(), success: true });
+      const name = match[1];
+      // 解码 HTML 实体（后端会转义引号）
+      const params = decodeHtmlEntities(match[2] || "");
+      const result = match[3].trim();
+      const key = getToolCallKey(name, params);
+      toolResults.set(key, { result, success: true });
+      // 同时保存仅用工具名的版本作为回退
+      if (!toolResults.has(name)) {
+        toolResults.set(name, { result, success: true });
+      }
     }
     
     // 提取 tool_error
-    const errorRegex = /<tool_error name="([^"]+)">([\s\S]*?)<\/tool_error>/g;
+    const errorRegex = /<tool_error name="([^"]+)"(?:\s+params="([^"]*)")?>([\s\S]*?)<\/tool_error>/g;
     while ((match = errorRegex.exec(content)) !== null) {
-      toolResults.set(match[1], { result: match[2].trim(), success: false });
+      const name = match[1];
+      const params = decodeHtmlEntities(match[2] || "");
+      const result = match[3].trim();
+      const key = getToolCallKey(name, params);
+      toolResults.set(key, { result, success: false });
+      if (!toolResults.has(name)) {
+        toolResults.set(name, { result, success: false });
+      }
     }
   });
   
@@ -232,24 +273,24 @@ function cleanUserMessage(content: string): string {
 
 /**
  * 过程步骤块 - 根据任务状态决定展开/折叠
- * - 运行中：展开显示每个步骤
- * - 完成后：折叠成一行摘要
+ * - 当前轮次运行中：展开显示每个步骤
+ * - 历史轮次或完成后：折叠成一行摘要
  */
-function ProcessStepsBlock({
+const ProcessStepsBlock = memo(function ProcessStepsBlock({
   thinkingBlocks,
   toolCalls,
   totalSteps,
-  isRunning,
+  isCurrentRound,
 }: {
   thinkingBlocks: ThinkingBlock[];
   toolCalls: ToolCallInfo[];
   totalSteps: number;
-  isRunning: boolean;
+  isCurrentRound: boolean;  // 是否是当前执行中的轮次
 }) {
   const [manualExpanded, setManualExpanded] = useState(false);
   
-  // 运行中自动展开，完成后自动折叠（除非用户手动展开）
-  const isExpanded = isRunning || manualExpanded;
+  // 只有当前轮次运行中才自动展开，历史轮次保持折叠
+  const isExpanded = isCurrentRound || manualExpanded;
   
   // 生成摘要文字
   const toolNames = [...new Set(toolCalls.map(t => t.name))];
@@ -269,35 +310,50 @@ function ProcessStepsBlock({
         <span>{totalSteps} 个步骤{!isExpanded && `: ${summaryText}`}</span>
       </button>
       
-      {/* 展开内容 - 带动画 */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="px-3 pb-1.5 space-y-px">
-              {thinkingBlocks.map((thinking, i) => (
-                <ThinkingCollapsible key={`thinking-${i}`} thinking={thinking} />
-              ))}
-              {toolCalls.map((tool, i) => (
-                <ToolCallCollapsible key={`tool-${i}`} tool={tool} />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 展开内容 */}
+      {isCurrentRound ? (
+        // 当前轮次运行中：直接渲染，不使用动画（避免重渲染时的抖动）
+        isExpanded && (
+          <div className="px-3 pb-1.5 space-y-px">
+            {thinkingBlocks.map((thinking, i) => (
+              <ThinkingCollapsible key={`thinking-${i}`} thinking={thinking} />
+            ))}
+            {toolCalls.map((tool, i) => (
+              <ToolCallCollapsible key={`tool-${i}`} tool={tool} />
+            ))}
+          </div>
+        )
+      ) : (
+        // 完成后：使用动画进行折叠/展开
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="px-3 pb-1.5 space-y-px">
+                {thinkingBlocks.map((thinking, i) => (
+                  <ThinkingCollapsible key={`thinking-${i}`} thinking={thinking} />
+                ))}
+                {toolCalls.map((tool, i) => (
+                  <ToolCallCollapsible key={`tool-${i}`} tool={tool} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
-}
+});
 
 /**
  * 思考块折叠组件
  */
-function ThinkingCollapsible({ thinking }: { thinking: ThinkingBlock }) {
+const ThinkingCollapsible = memo(function ThinkingCollapsible({ thinking }: { thinking: ThinkingBlock }) {
   const [expanded, setExpanded] = useState(false);
   
   return (
@@ -326,12 +382,12 @@ function ThinkingCollapsible({ thinking }: { thinking: ThinkingBlock }) {
       </AnimatePresence>
     </div>
   );
-}
+});
 
 /**
  * 工具调用折叠卡片
  */
-function ToolCallCollapsible({ tool }: { tool: ToolCallInfo }) {
+const ToolCallCollapsible = memo(function ToolCallCollapsible({ tool }: { tool: ToolCallInfo }) {
   const [expanded, setExpanded] = useState(false);
   const isComplete = tool.result !== undefined;
   const summary = getToolSummary(tool.name, tool.params, tool.result);
@@ -392,7 +448,7 @@ function ToolCallCollapsible({ tool }: { tool: ToolCallInfo }) {
       </AnimatePresence>
     </div>
   );
-}
+});
 
 // ============ 主组件 ============
 
@@ -400,7 +456,13 @@ interface AgentMessageRendererProps {
   messages: Message[];
   isRunning: boolean;
   className?: string;
+  // 超时检测
+  taskStartTime?: number | null;
+  onRetryTimeout?: () => void;
 }
+
+// 超时阈值：2 分钟
+const TIMEOUT_THRESHOLD_MS = 2 * 60 * 1000;
 
 /**
  * Agent 消息列表渲染器
@@ -410,15 +472,52 @@ interface AgentMessageRendererProps {
  * - 该轮内所有 assistant 消息的工具调用合并显示
  * - 最后一条 assistant 消息的 finalAnswer 作为最终回答
  */
-export function AgentMessageRenderer({ messages, isRunning, className = "" }: AgentMessageRendererProps) {
+export const AgentMessageRenderer = memo(function AgentMessageRenderer({ 
+  messages, 
+  isRunning, 
+  className = "",
+  taskStartTime,
+  onRetryTimeout,
+}: AgentMessageRendererProps) {
+  // 超时检测状态
+  const [isLongRunning, setIsLongRunning] = useState(false);
+  
+  // 超时检测：每 5 秒检查一次
+  useEffect(() => {
+    if (!isRunning || !taskStartTime) {
+      setIsLongRunning(false);
+      return;
+    }
+    
+    const checkTimeout = () => {
+      const elapsed = Date.now() - taskStartTime;
+      setIsLongRunning(elapsed > TIMEOUT_THRESHOLD_MS);
+    };
+    
+    // 立即检查一次
+    checkTimeout();
+    
+    // 定时检查
+    const timer = setInterval(checkTimeout, 5000);
+    return () => clearInterval(timer);
+  }, [isRunning, taskStartTime]);
+  
   // 收集所有工具结果
   const toolResults = useMemo(() => collectToolResults(messages), [messages]);
   
-  // 按轮次分组渲染
-  const renderedContent = useMemo(() => {
-    const elements: JSX.Element[] = [];
+  // 按轮次分组计算数据（只计算数据，不创建 JSX）
+  const rounds = useMemo(() => {
+    const result: Array<{
+      userIdx: number;
+      userContent: string;
+      thinkingBlocks: ThinkingBlock[];
+      toolCalls: ToolCallInfo[];
+      finalAnswer: string;
+      roundKey: string;
+      hasAIContent: boolean;
+    }> = [];
     
-    // 找到所有用户消息的索引，用于分组
+    // 找到所有用户消息的索引
     const userMessageIndices: number[] = [];
     messages.forEach((msg, idx) => {
       if (msg.role === "user" && !shouldSkipUserMessage(msg.content)) {
@@ -426,34 +525,17 @@ export function AgentMessageRenderer({ messages, isRunning, className = "" }: Ag
       }
     });
     
-    // 按轮次处理
     userMessageIndices.forEach((userIdx, roundIndex) => {
       const userMsg = messages[userIdx];
       const displayContent = cleanUserMessage(userMsg.content);
       
       if (!displayContent) return;
       
-      // 渲染用户消息
-      elements.push(
-        <motion.div 
-          key={`user-${userIdx}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex justify-end mb-4"
-        >
-          <div className="max-w-[80%] bg-muted text-foreground rounded-2xl rounded-tr-sm px-4 py-2.5">
-            <span className="text-sm">{displayContent}</span>
-          </div>
-        </motion.div>
-      );
-      
-      // 找到这轮的所有 assistant 消息（从当前 user 到下一个 user 之间）
+      // 找到这轮的所有 assistant 消息
       const nextUserIdx = userMessageIndices[roundIndex + 1] ?? messages.length;
       const assistantMessages = messages.slice(userIdx + 1, nextUserIdx).filter(m => m.role === "assistant");
       
-      if (assistantMessages.length === 0) return;
-      
-      // 聚合这轮所有 assistant 消息的内容
+      // 聚合内容
       const allThinkingBlocks: ThinkingBlock[] = [];
       const allToolCalls: ToolCallInfo[] = [];
       let finalAnswer = "";
@@ -462,63 +544,99 @@ export function AgentMessageRenderer({ messages, isRunning, className = "" }: Ag
         const parsed = parseAssistantMessage(msg.content, toolResults);
         allThinkingBlocks.push(...parsed.thinkingBlocks);
         allToolCalls.push(...parsed.toolCalls);
-        // 最终回答取最后一个非空的
         if (parsed.finalAnswer) {
           finalAnswer = parsed.finalAnswer;
         }
       });
       
-      // 跳过没有内容的轮次
-      if (allThinkingBlocks.length === 0 && allToolCalls.length === 0 && !finalAnswer) {
-        return;
-      }
+      // 使用用户消息内容的前 50 字符作为稳定 key
+      const roundKey = `round-${displayContent.slice(0, 50)}`;
       
-      // 渲染这轮的 AI 回复
-      const hasProcessSteps = allThinkingBlocks.length > 0 || allToolCalls.length > 0;
-      const totalSteps = allThinkingBlocks.length + allToolCalls.length;
+      // 判断是否有 AI 回复内容
+      const hasAIContent = allThinkingBlocks.length > 0 || allToolCalls.length > 0 || !!finalAnswer;
       
-      elements.push(
-        <motion.div 
-          key={`assistant-round-${roundIndex}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex gap-3 mb-4"
-        >
-          <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shrink-0">
-            <Bot size={16} className="text-muted-foreground" />
-          </div>
-          <div className="flex-1 min-w-0 space-y-2">
-            {/* 过程步骤：思考 + 工具调用 */}
-            {hasProcessSteps && (
-              <ProcessStepsBlock
-                thinkingBlocks={allThinkingBlocks}
-                toolCalls={allToolCalls}
-                totalSteps={totalSteps}
-                isRunning={isRunning}
-              />
-            )}
-            
-            {/* 最终回答 */}
-            {finalAnswer && (
-              <div 
-                className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: parseMarkdown(finalAnswer) }}
-              />
-            )}
-          </div>
-        </motion.div>
-      );
+      result.push({
+        userIdx,
+        userContent: displayContent,
+        thinkingBlocks: allThinkingBlocks,
+        toolCalls: allToolCalls,
+        finalAnswer,
+        roundKey,
+        hasAIContent,
+      });
     });
     
-    return elements;
-  }, [messages, toolResults, isRunning]);
+    return result;
+  }, [messages, toolResults]);
   
   return (
     <div className={className}>
-      {renderedContent}
+      {rounds.map((round, index) => {
+        const hasProcessSteps = round.thinkingBlocks.length > 0 || round.toolCalls.length > 0;
+        const totalSteps = round.thinkingBlocks.length + round.toolCalls.length;
+        // 只有最后一轮且 Agent 正在运行时才是"当前轮次"
+        const isCurrentRound = isRunning && index === rounds.length - 1;
+        
+        return (
+          <div key={round.roundKey}>
+            {/* 用户消息 */}
+            <div className="flex justify-end mb-4">
+              <div className="max-w-[80%] bg-muted text-foreground rounded-2xl rounded-tr-sm px-4 py-2.5">
+                <span className="text-sm">{round.userContent}</span>
+              </div>
+            </div>
+            
+            {/* AI 回复 - 只有在有内容时才显示 */}
+            {round.hasAIContent && (
+              <div className="flex gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shrink-0">
+                  <Bot size={16} className="text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-2">
+                  {hasProcessSteps && (
+                    <ProcessStepsBlock
+                      key={`steps-${round.roundKey}`}
+                      thinkingBlocks={round.thinkingBlocks}
+                      toolCalls={round.toolCalls}
+                      totalSteps={totalSteps}
+                      isCurrentRound={isCurrentRound}
+                    />
+                  )}
+                  
+                  {round.finalAnswer && (
+                    <div 
+                      className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: parseMarkdown(round.finalAnswer) }}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      
+      {/* 超时提示 */}
+      {isRunning && isLongRunning && onRetryTimeout && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-600 dark:text-amber-400 text-sm mt-2"
+        >
+          <AlertTriangle size={16} className="shrink-0" />
+          <span>检测到响应时间过长</span>
+          <button
+            onClick={onRetryTimeout}
+            className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 rounded-md transition-colors font-medium"
+          >
+            <RefreshCw size={14} />
+            <span>点击重试</span>
+          </button>
+        </motion.div>
+      )}
     </div>
   );
-}
+});
 
 /**
  * 复制按钮组件

@@ -64,6 +64,10 @@ interface AgentState {
   currentTask: string | null;
   lastError: string | null;
   lastIntent: Intent | null;
+  
+  // 超时检测
+  taskStartTime: number | null;  // 当前任务/工具开始时间
+  isLongRunning: boolean;        // 是否超时（超过 2 分钟）
 
   // 会话
   sessions: AgentSession[];
@@ -88,6 +92,7 @@ interface AgentState {
   reject: () => void;
   clearChat: () => void;
   retry: (context: TaskContext) => Promise<void>;  // 重新生成最后一条 AI 回复
+  retryTimeout: (context: TaskContext) => Promise<void>;  // 超时重试
   checkFirstLoad: () => void;
 
   // 内部更新
@@ -158,6 +163,10 @@ export const useAgentStore = create<AgentState>()(
         currentTask: null,
         lastError: null,
         lastIntent: null,
+        
+        // 超时检测
+        taskStartTime: null,
+        isLongRunning: false,
 
         // 会话列表
         sessions: [
@@ -336,6 +345,8 @@ export const useAgentStore = create<AgentState>()(
           set((state) => ({
             status: "running",
             lastIntent: null, // 重置意图状态，确保显示的是本次任务的结果
+            taskStartTime: Date.now(),  // 记录任务开始时间
+            isLongRunning: false,       // 重置超时标记
             sessions: state.sessions.map((s) =>
               s.id === state.currentSessionId
                 ? { ...s, status: "running", updatedAt: Date.now(), lastIntent: null }
@@ -536,6 +547,54 @@ export const useAgentStore = create<AgentState>()(
           await get().startTask(userContent, context);
         },
 
+        // 超时重试：中断当前任务，追加提示，继续执行
+        retryTimeout: async (context) => {
+          const loop = getAgentLoop();
+          
+          // 1. 中断当前任务
+          loop.abort();
+          
+          // 2. 获取当前消息
+          const { messages, pendingTool } = get();
+          
+          // 3. 追加超时提示消息
+          const timeoutMessage = pendingTool 
+            ? `⚠️ 工具 ${pendingTool.name} 执行超时，请重新考虑并尝试其他方式完成任务。`
+            : `⚠️ 上一次请求响应超时，请重新考虑并继续任务。`;
+          
+          // 4. 重置 AgentLoop 并恢复消息
+          resetAgentLoop();
+          (globalThis as any).__agentSetupListeners?.();
+          
+          const newLoop = getAgentLoop();
+          const loopState = newLoop.getState();
+          
+          // 恢复之前的消息（包括 system）
+          const systemMsg = loopState.messages.find(m => m.role === "system");
+          const allMessages = systemMsg 
+            ? [systemMsg, ...messages, { role: "user" as const, content: timeoutMessage }]
+            : [...messages, { role: "user" as const, content: timeoutMessage }];
+          
+          newLoop.setMessages(allMessages);
+          
+          // 5. 更新状态
+          set({ 
+            status: "running",
+            pendingTool: null,
+            taskStartTime: Date.now(),
+            isLongRunning: false,
+          });
+          
+          // 6. 继续执行 Agent 循环
+          try {
+            await newLoop.continueLoop(context);
+          } catch (error) {
+            console.error("[Agent] Retry timeout failed:", error);
+          }
+          
+          get()._updateFromLoop();
+        },
+
         checkFirstLoad: () => {
           if (!hasInitialized) {
             hasInitialized = true;
@@ -565,12 +624,18 @@ export const useAgentStore = create<AgentState>()(
             const finalMessages = shouldUpdateMessages ? viewMessages : state.messages;
             
             const newTitle = generateAgentTitleFromAssistant(finalMessages, "新对话");
+            
+            // 任务结束时清除超时状态
+            const isFinished = ["completed", "error", "idle", "aborted"].includes(loopState.status);
+            
             return {
               status: loopState.status,
               messages: finalMessages,
               pendingTool: loopState.pendingTool,
               currentTask: loopState.currentTask,
               lastError: loopState.lastError,
+              // 任务结束时清除超时相关状态
+              ...(isFinished && { taskStartTime: null, isLongRunning: false }),
               sessions: state.sessions.map((s) =>
                 s.id === state.currentSessionId
                   ? {

@@ -113,6 +113,8 @@ export function MainAIChatShell() {
     abort: agentAbort,
     checkFirstLoad: checkAgentFirstLoad,
     lastIntent,
+    taskStartTime,
+    retryTimeout,
   } = useAgentStore();
   
   // Chat store - 使用 selector 确保状态变化时正确重新渲染
@@ -447,7 +449,13 @@ export function MainAIChatShell() {
             {chatMode === "agent" ? (
               <AgentMessageRenderer 
                 messages={agentMessages} 
-                isRunning={agentStatus === "running"} 
+                isRunning={agentStatus === "running"}
+                taskStartTime={taskStartTime}
+                onRetryTimeout={() => retryTimeout({
+                  workspacePath: vaultPath || "",
+                  activeNote: currentFile || undefined,
+                  activeNoteContent: currentFile ? currentContent : undefined,
+                })}
               />
             ) : (
               /* Chat 模式：原有的消息渲染 */

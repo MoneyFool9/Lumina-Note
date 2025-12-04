@@ -69,8 +69,10 @@ export const CreateNoteTool: ToolExecutor = {
       // 写入文件
       await writeFile(fullPath, content);
 
-      // 刷新文件树，让左侧面板和知识图谱及时更新
-      await useFileStore.getState().refreshFileTree();
+      // 延迟刷新文件树，避免在 Agent 运行时触发 UI 重渲染
+      setTimeout(() => {
+        useFileStore.getState().refreshFileTree();
+      }, 100);
 
       return {
         success: true,

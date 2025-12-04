@@ -127,6 +127,32 @@ export class AgentLoop {
   }
 
   /**
+   * 继续执行循环（用于超时重试）
+   * 不创建新任务，直接从当前消息状态继续
+   */
+  async continueLoop(context: TaskContext, configOverride?: Partial<LLMConfig>): Promise<void> {
+    this.abortController = new AbortController();
+    this.stateManager.setLLMConfig(configOverride);
+    this.stateManager.setStatus("running");
+    
+    try {
+      await this.runLoop(context);
+      
+      const status = this.stateManager.getStatus();
+      if (status === "running") {
+        this.stateManager.setStatus("completed");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        this.stateManager.setStatus("aborted");
+      } else {
+        this.stateManager.setStatus("error");
+        this.stateManager.setError(error instanceof Error ? error.message : "未知错误");
+      }
+    }
+  }
+
+  /**
    * 获取当前状态
    */
   getState() {
@@ -316,11 +342,15 @@ export class AgentLoop {
 
       // 检查是否需要用户审批
       if (this.requiresApproval(toolCall)) {
+        // 先创建等待 Promise（设置 resolver），再更新状态
+        // 这样自动审批的回调才能正确调用 resolver
+        const approvalPromise = this.waitForApproval();
+        
         this.stateManager.setStatus("waiting_approval");
         this.stateManager.setPendingTool(toolCall);
 
         // 等待用户审批
-        const approved = await this.waitForApproval();
+        const approved = await approvalPromise;
         
         if (!approved) {
           this.stateManager.addMessage({

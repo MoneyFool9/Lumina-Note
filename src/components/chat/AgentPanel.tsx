@@ -47,6 +47,8 @@ export function AgentPanel() {
     reject,
     clearChat,
     retry,
+    taskStartTime,
+    retryTimeout,
   } = useAgentStore();
 
   const { vaultPath, currentFile, currentContent } = useFileStore();
@@ -108,7 +110,13 @@ export function AgentPanel() {
           {/* 消息列表 - 使用 AgentMessageRenderer 组件 */}
           <AgentMessageRenderer 
             messages={messages} 
-            isRunning={status === "running"} 
+            isRunning={status === "running"}
+            taskStartTime={taskStartTime}
+            onRetryTimeout={() => retryTimeout({
+              workspacePath: vaultPath || "",
+              activeNote: currentFile || undefined,
+              activeNoteContent: currentFile ? currentContent : undefined,
+            })}
           />
 
           {/* 工具审批 */}

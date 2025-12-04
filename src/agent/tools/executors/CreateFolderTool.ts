@@ -45,8 +45,10 @@ export const CreateFolderTool: ToolExecutor = {
       // 创建目录
       await createDir(fullPath, { recursive: true });
 
-      // 刷新文件树
-      await useFileStore.getState().refreshFileTree();
+      // 延迟刷新文件树，避免在 Agent 运行时触发 UI 重渲染
+      setTimeout(() => {
+        useFileStore.getState().refreshFileTree();
+      }, 100);
 
       return {
         success: true,

@@ -88,6 +88,7 @@ function parseToolParams(content: string): Record<string, unknown> {
 /**
  * 格式化工具结果为消息
  * 对内容长度进行限制，避免请求体过大导致 HTTP/2 协议错误
+ * 包含 params 签名用于前端精确匹配
  */
 export function formatToolResult(toolCall: ToolCall, result: { success: boolean; content: string; error?: string }): string {
   const MAX_CONTENT_LENGTH = 8000; // 单个工具结果最大字符数
@@ -99,12 +100,18 @@ export function formatToolResult(toolCall: ToolCall, result: { success: boolean;
     content = content.slice(0, MAX_CONTENT_LENGTH) + `\n\n... [内容已截断，原长度: ${result.content.length} 字符]`;
   }
   
+  // 生成参数签名（用于前端精确匹配同名工具调用）
+  const paramsSignature = toolCall.raw
+    .replace(/\s+/g, " ")
+    .slice(0, 100)
+    .replace(/"/g, "&quot;");  // 转义引号
+  
   if (result.success) {
-    return `<tool_result name="${toolCall.name}">
+    return `<tool_result name="${toolCall.name}" params="${paramsSignature}">
 ${content}
 </tool_result>`;
   } else {
-    return `<tool_error name="${toolCall.name}">
+    return `<tool_error name="${toolCall.name}" params="${paramsSignature}">
 ${content}
 </tool_error>`;
   }

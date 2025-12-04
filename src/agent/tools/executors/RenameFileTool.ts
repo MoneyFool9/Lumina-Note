@@ -66,8 +66,10 @@ export const RenameFileTool: ToolExecutor = {
       // 执行重命名
       await rename(fullPath, newFullPath);
 
-      // 刷新文件树
-      await useFileStore.getState().refreshFileTree();
+      // 延迟刷新文件树，避免在 Agent 运行时触发 UI 重渲染
+      setTimeout(() => {
+        useFileStore.getState().refreshFileTree();
+      }, 100);
 
       return {
         success: true,

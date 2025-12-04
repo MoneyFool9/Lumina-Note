@@ -43,8 +43,10 @@ export const DeleteNoteTool: ToolExecutor = {
       // 执行删除
       await deleteFile(fullPath);
 
-      // 刷新文件树
-      await useFileStore.getState().refreshFileTree();
+      // 延迟刷新文件树，避免在 Agent 运行时触发 UI 重渲染
+      setTimeout(() => {
+        useFileStore.getState().refreshFileTree();
+      }, 100);
 
       // 如果删除的文件正在打开，关闭它
       const { tabs, closeTab } = useFileStore.getState();

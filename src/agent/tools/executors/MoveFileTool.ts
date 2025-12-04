@@ -65,8 +65,10 @@ export const MoveFileTool: ToolExecutor = {
       // 执行移动
       await rename(fromPath, toPath);
 
-      // 刷新文件树
-      await useFileStore.getState().refreshFileTree();
+      // 延迟刷新文件树，避免在 Agent 运行时触发 UI 重渲染
+      setTimeout(() => {
+        useFileStore.getState().refreshFileTree();
+      }, 100);
 
       return {
         success: true,
