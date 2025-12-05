@@ -2,8 +2,7 @@ import { useCallback, useEffect } from "react";
 import { useUIStore } from "@/stores/useUIStore";
 import { useSplitStore } from "@/stores/useSplitStore";
 import { DatabaseView } from "./DatabaseView";
-import { CodeMirrorEditor } from "@/editor/CodeMirrorEditor";
-import { ReadingView } from "@/editor/ReadingView";
+import { CodeMirrorEditor, ViewMode } from "@/editor/CodeMirrorEditor";
 import { getFileName, cn } from "@/lib/utils";
 import { X, Columns, Rows, FileText, Loader2, Save } from "lucide-react";
 
@@ -133,14 +132,11 @@ export function DatabaseSplitView({ dbId }: DatabaseSplitViewProps) {
               
               {/* Editor */}
               <div className="flex-1 overflow-hidden">
-                {editorMode === "reading" ? (
-                  <ReadingView content={secondaryContent} />
-                ) : (
-                  <CodeMirrorEditor
-                    content={secondaryContent}
-                    onChange={handleContentChange}
-                  />
-                )}
+                <CodeMirrorEditor
+                  content={secondaryContent}
+                  onChange={handleContentChange}
+                  viewMode={editorMode as ViewMode}
+                />
               </div>
             </div>
           ) : (

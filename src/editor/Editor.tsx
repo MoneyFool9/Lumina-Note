@@ -5,8 +5,7 @@ import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { MainAIChatShell } from "@/components/layout/MainAIChatShell";
 import { debounce, getFileName } from "@/lib/utils";
-import { ReadingView } from "./ReadingView";
-import { CodeMirrorEditor, CodeMirrorEditorRef } from "./CodeMirrorEditor";
+import { CodeMirrorEditor, CodeMirrorEditorRef, ViewMode } from "./CodeMirrorEditor";
 import { SelectionToolbar } from "@/components/toolbar/SelectionToolbar";
 import { 
   Sidebar, 
@@ -372,38 +371,18 @@ export function Editor() {
                   </button>
                 </div>
               )}
-            {editorMode === "reading" && (
-              <div key="reading" className="editor-mode-content">
-                <ReadingView content={currentContent} />
-              </div>
-            )}
-            
-            {editorMode === "live" && (
-              <div key="live" className="editor-mode-content h-full">
-                <CodeMirrorEditor 
-                  ref={codeMirrorRef}
-                  content={currentContent} 
-                  onChange={(newContent) => {
-                    updateContent(newContent);
-                    debouncedSave();
-                  }}
-                />
-              </div>
-            )}
-            
-            {editorMode === "source" && (
-              <div key="source" className="editor-mode-content h-full">
-                <CodeMirrorEditor 
-                  ref={codeMirrorRef}
-                  content={currentContent} 
-                  onChange={(newContent) => {
-                    updateContent(newContent);
-                    debouncedSave();
-                  }}
-                  livePreview={false}
-                />
-              </div>
-            )}
+            {/* 统一使用 CodeMirrorEditor，通过 viewMode 切换模式 */}
+            <div key="editor" className="editor-mode-content h-full">
+              <CodeMirrorEditor 
+                ref={codeMirrorRef}
+                content={currentContent} 
+                onChange={(newContent) => {
+                  updateContent(newContent);
+                  debouncedSave();
+                }}
+                viewMode={editorMode as ViewMode}
+              />
+            </div>
           </div>
         </div>
       )}

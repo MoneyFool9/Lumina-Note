@@ -25,12 +25,36 @@ import { common, createLowlight } from "lowlight";
 // Initialize lowlight with common languages
 const lowlight = createLowlight(common);
 
+/** 编辑器视图模式 */
+export type ViewMode = 'reading' | 'live' | 'source';
+
+// ============ 鼠标拖拽状态管理 ============
+// 用于在拖拽选择时隐藏所有渲染效果，松手后再显示
+
+const setMouseSelecting = StateEffect.define<boolean>();
+
+const mouseSelectingField = StateField.define<boolean>({
+  create() {
+    return false;
+  },
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setMouseSelecting)) {
+        return effect.value;
+      }
+    }
+    return value;
+  },
+});
+
 interface CodeMirrorEditorProps {
   content: string;
   onChange: (content: string) => void;
   className?: string;
   isDark?: boolean;
-  /** 是否启用实时预览（隐藏语法标记、渲染数学公式），默认 true */
+  /** 视图模式：reading(只读渲染) / live(实时预览) / source(源码) */
+  viewMode?: ViewMode;
+  /** @deprecated 使用 viewMode 代替 */
   livePreview?: boolean;
 }
 
@@ -60,11 +84,19 @@ const editorTheme = EditorView.theme({
     borderLeftColor: "hsl(var(--primary))",
     borderLeftWidth: "2px",
   },
+  // 选择背景色 - 淡蓝色
   ".cm-selectionBackground": {
-    backgroundColor: "hsl(var(--primary) / 0.2) !important",
+    backgroundColor: "rgba(147, 197, 253, 0.35) !important", // 淡蓝色 (blue-300)
   },
   "&.cm-focused .cm-selectionBackground": {
-    backgroundColor: "hsl(var(--primary) / 0.3) !important",
+    backgroundColor: "rgba(147, 197, 253, 0.45) !important", // 聚焦时稍深
+  },
+  // 覆盖浏览器原生选择样式
+  "& ::selection": {
+    backgroundColor: "rgba(147, 197, 253, 0.45) !important",
+  },
+  "& ::-moz-selection": {
+    backgroundColor: "rgba(147, 197, 253, 0.45) !important",
   },
   ".cm-gutters": {
     display: "none",
@@ -152,11 +184,10 @@ const editorTheme = EditorView.theme({
   ".cm-formatting": {
     color: "hsl(var(--muted-foreground) / 0.6)",
   },
+  // 隐藏语法标记但保留空间，避免布局偏移
   ".cm-formatting-hidden": {
-    fontSize: "0",
-    width: "0",
-    display: "inline-block",
-    overflow: "hidden",
+    color: "transparent",
+    // 保持原有尺寸，不改变布局
   },
   // 标签
   ".cm-tag, .cm-hashtag": {
@@ -377,7 +408,10 @@ const codeBlockStateField = StateField.define<DecorationSet>({
     return buildCodeBlockDecorations(state);
   },
   update(decorations, transaction) {
-    if (transaction.docChanged || transaction.selection) {
+    // 检查是否有鼠标状态变化
+    const mouseStateChanged = transaction.effects.some(e => e.is(setMouseSelecting));
+    
+    if (transaction.docChanged || transaction.selection || mouseStateChanged) {
       return buildCodeBlockDecorations(transaction.state);
     }
     return decorations.map(transaction.changes);
@@ -388,8 +422,14 @@ const codeBlockStateField = StateField.define<DecorationSet>({
 function buildCodeBlockDecorations(state: EditorState): DecorationSet {
   const decorations: any[] = [];
   const selection = state.selection;
+  
+  // 检查是否正在鼠标拖拽
+  const isMouseSelecting = state.field(mouseSelectingField, false) ?? false;
 
   const isSelected = (from: number, to: number) => {
+    // 拖拽中时，不触发选中逻辑（保持渲染）
+    if (isMouseSelecting) return false;
+    
     for (const range of selection.ranges) {
       if (range.from <= to && range.to >= from) {
         return true;
@@ -444,7 +484,10 @@ const tableStateField = StateField.define<DecorationSet>({
     return buildTableDecorations(state);
   },
   update(decorations, transaction) {
-    if (transaction.docChanged || transaction.selection) {
+    // 检查是否有鼠标状态变化
+    const mouseStateChanged = transaction.effects.some(e => e.is(setMouseSelecting));
+    
+    if (transaction.docChanged || transaction.selection || mouseStateChanged) {
       return buildTableDecorations(transaction.state);
     }
     return decorations.map(transaction.changes);
@@ -455,8 +498,14 @@ const tableStateField = StateField.define<DecorationSet>({
 function buildTableDecorations(state: EditorState): DecorationSet {
   const decorations: any[] = [];
   const selection = state.selection;
+  
+  // 检查是否正在鼠标拖拽
+  const isMouseSelecting = state.field(mouseSelectingField, false) ?? false;
 
   const isSelected = (from: number, to: number) => {
+    // 拖拽中时，不触发选中逻辑（保持渲染）
+    if (isMouseSelecting) return false;
+    
     for (const range of selection.ranges) {
       if (range.from <= to && range.to >= from) {
         return true;
@@ -490,8 +539,11 @@ const mathStateField = StateField.define<DecorationSet>({
     return buildMathDecorations(state);
   },
   update(decorations, transaction) {
-    // 当文档内容变化或选择变化时更新装饰
-    if (transaction.docChanged || transaction.selection) {
+    // 检查是否有鼠标状态变化
+    const mouseStateChanged = transaction.effects.some(e => e.is(setMouseSelecting));
+    
+    // 当文档内容变化、选择变化或鼠标状态变化时更新装饰
+    if (transaction.docChanged || transaction.selection || mouseStateChanged) {
       return buildMathDecorations(transaction.state);
     }
     return decorations.map(transaction.changes);
@@ -505,8 +557,15 @@ function buildMathDecorations(state: EditorState): DecorationSet {
     const doc = state.doc.toString();
     const selection = state.selection;
     
+    // 检查是否正在鼠标拖拽
+    const isMouseSelecting = state.field(mouseSelectingField, false) ?? false;
+    
     // 辅助函数：检查范围是否与当前选择重叠
+    // 鼠标拖拽时，不显示源码（保持渲染状态）
     const isSelected = (from: number, to: number) => {
+      // 拖拽中时，不触发选中逻辑（保持渲染）
+      if (isMouseSelecting) return false;
+      
       for (const range of selection.ranges) {
         // 只要选择范围（包括光标）与公式范围有任何重叠或接触，就视为选中
         // 使用 >= 和 <= 确保光标在公式边缘时也显示源码
@@ -595,63 +654,120 @@ function buildMathDecorations(state: EditorState): DecorationSet {
   }
 }
 
-// 创建 Live Preview 装饰 - 只有选择区域显示源码（不响应光标，避免卡顿）
-function createLivePreviewDecorations(view: EditorView): DecorationSet {
+// 安全创建隐藏装饰的辅助函数
+function createHiddenDecoration(state: EditorState, from: number, to: number, decorations: any[]) {
+  // 确保不跨行
+  if (from >= to) return;
+  const fromLine = state.doc.lineAt(from).number;
+  const toLine = state.doc.lineAt(to).number;
+  if (fromLine !== toLine) return;
+  // 检查范围内是否有换行符
+  const text = state.doc.sliceString(from, to);
+  if (text.includes('\n')) return;
+  
+  decorations.push(
+    Decoration.mark({ class: "cm-formatting-hidden" }).range(from, to)
+  );
+}
+
+// 隐藏所有语法标记（用于阅读模式）
+function createReadingModeDecorations(state: EditorState): DecorationSet {
+  try {
+    const decorations: any[] = [];
+    
+    // 遍历语法树，隐藏所有语法标记
+    syntaxTree(state).iterate({
+      enter: (node) => {
+        const nodeType = node.name;
+        
+        if (nodeType === "HeaderMark" || 
+            nodeType === "EmphasisMark" || 
+            nodeType === "StrikethroughMark" || 
+            nodeType === "CodeMark") {
+          createHiddenDecoration(state, node.from, node.to, decorations);
+        }
+      },
+    });
+    
+    return Decoration.set(decorations, true);
+  } catch (e) {
+    console.error("Error creating reading mode decorations:", e);
+    return Decoration.none;
+  }
+}
+
+// 阅读模式 Plugin - 始终隐藏所有语法标记
+const readingModePlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    
+    constructor(view: EditorView) {
+      this.decorations = createReadingModeDecorations(view.state);
+    }
+    
+    update(update: ViewUpdate) {
+      if (update.docChanged) {
+        this.decorations = createReadingModeDecorations(update.state);
+      }
+    }
+  },
+  {
+    decorations: (v) => v.decorations,
+  }
+);
+
+// 创建 Live Preview 装饰 - 光标所在行或选择区域显示源码
+// isMouseSelecting: 鼠标拖拽中时，不显示 tokens（避免闪烁）
+function createLivePreviewDecorations(view: EditorView, isMouseSelecting: boolean): DecorationSet {
   try {
     const decorations: any[] = [];
     const { state } = view;
     const selection = state.selection;
     
-    // 只获取选择范围（不含光标）
-    const selectedRanges: Array<{ from: number; to: number }> = [];
-    for (const range of selection.ranges) {
-      if (range.from !== range.to) {
-        selectedRanges.push({ from: range.from, to: range.to });
+    // 收集所有需要显示源码的行号
+    const activeLineNumbers = new Set<number>();
+    
+    // 鼠标拖拽中时，不激活任何行（全部隐藏 tokens）
+    if (!isMouseSelecting) {
+      for (const range of selection.ranges) {
+        // 光标所在行（即使没有选择）
+        const cursorLine = state.doc.lineAt(range.head).number;
+        activeLineNumbers.add(cursorLine);
+        
+        // 如果有选择，添加选择范围覆盖的所有行
+        if (range.from !== range.to) {
+          const fromLine = state.doc.lineAt(range.from).number;
+          const toLine = state.doc.lineAt(range.to).number;
+          for (let lineNum = fromLine; lineNum <= toLine; lineNum++) {
+            activeLineNumbers.add(lineNum);
+          }
+        }
       }
     }
     
-    // 检查是否与选择重叠
-    const shouldShowSource = (from: number, to: number) => {
-      for (const range of selectedRanges) {
-        if (range.from < to && range.to > from) return true;
-      }
-      return false;
-    };
-    
-    // 安全创建装饰的辅助函数
-    const safeDecoration = (from: number, to: number) => {
-      // 确保不跨行
-      if (from >= to) return;
+    // 检查节点是否在激活行内
+    const isInActiveLine = (from: number, to: number) => {
       const fromLine = state.doc.lineAt(from).number;
       const toLine = state.doc.lineAt(to).number;
-      if (fromLine !== toLine) return;
-      // 检查范围内是否有换行符
-      const text = state.doc.sliceString(from, to);
-      if (text.includes('\n')) return;
-      
-      decorations.push(
-        Decoration.mark({ class: "cm-formatting-hidden" }).range(from, to)
-      );
+      for (let lineNum = fromLine; lineNum <= toLine; lineNum++) {
+        if (activeLineNumbers.has(lineNum)) return true;
+      }
+      return false;
     };
     
     // 遍历语法树，找到需要隐藏的语法标记
     syntaxTree(state).iterate({
       enter: (node) => {
-        // 如果与选择重叠，不隐藏（显示源码）
-        if (shouldShowSource(node.from, node.to)) return;
+        // 如果在激活行内，不隐藏（显示源码）
+        if (isInActiveLine(node.from, node.to)) return;
         
         const nodeType = node.name;
         
-        // 处理各种 Markdown 语法标记
-        if (nodeType === "HeaderMark") {
-          // 只隐藏 # 标记本身，不包含后面的空格
-          safeDecoration(node.from, node.to);
-        } else if (nodeType === "EmphasisMark") {
-          safeDecoration(node.from, node.to);
-        } else if (nodeType === "StrikethroughMark") {
-          safeDecoration(node.from, node.to);
-        } else if (nodeType === "CodeMark") {
-          safeDecoration(node.from, node.to);
+        if (nodeType === "HeaderMark" || 
+            nodeType === "EmphasisMark" || 
+            nodeType === "StrikethroughMark" || 
+            nodeType === "CodeMark") {
+          createHiddenDecoration(state, node.from, node.to, decorations);
         }
       },
     });
@@ -663,29 +779,65 @@ function createLivePreviewDecorations(view: EditorView): DecorationSet {
   }
 }
 
-// Live Preview ViewPlugin - 只在有实际选择时更新
+// Live Preview ViewPlugin - 光标移动或选择变化时更新，支持鼠标拖拽检测
 const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    hadSelection: boolean = false;
+    lastCursorLine: number = -1;
+    view: EditorView;
     
     constructor(view: EditorView) {
-      this.decorations = createLivePreviewDecorations(view);
+      this.view = view;
+      this.decorations = createLivePreviewDecorations(view, false);
+      this.lastCursorLine = view.state.doc.lineAt(view.state.selection.main.head).number;
+      
+      // 监听鼠标事件
+      this.handleMouseDown = this.handleMouseDown.bind(this);
+      this.handleMouseUp = this.handleMouseUp.bind(this);
+      view.contentDOM.addEventListener('mousedown', this.handleMouseDown);
+      document.addEventListener('mouseup', this.handleMouseUp);
+    }
+    
+    handleMouseDown() {
+      // 通过 StateEffect 更新全局鼠标状态
+      this.view.dispatch({ effects: setMouseSelecting.of(true) });
+    }
+    
+    handleMouseUp() {
+      const isSelecting = this.view.state.field(mouseSelectingField, false);
+      if (isSelecting) {
+        // 松手后更新状态，触发所有 StateField 重新计算
+        this.view.dispatch({ effects: setMouseSelecting.of(false) });
+      }
     }
     
     update(update: ViewUpdate) {
-      const hasSelection = update.state.selection.ranges.some(r => r.from !== r.to);
+      // 更新 view 引用
+      this.view = update.view;
       
-      // 只在以下情况更新：
+      const isMouseSelecting = update.state.field(mouseSelectingField, false) ?? false;
+      const currentLine = update.state.doc.lineAt(update.state.selection.main.head).number;
+      const lineChanged = currentLine !== this.lastCursorLine;
+      
+      // 检查是否有鼠标状态变化
+      const mouseStateChanged = update.transactions.some(tr => 
+        tr.effects.some(e => e.is(setMouseSelecting))
+      );
+      
+      // 更新条件：
       // 1. 文档变化
-      // 2. 选择状态变化（有→无 或 无→有）
-      // 3. 有选择时选择范围变化
-      if (update.docChanged || 
-          hasSelection !== this.hadSelection ||
-          (hasSelection && update.selectionSet)) {
-        this.decorations = createLivePreviewDecorations(update.view);
+      // 2. 光标所在行变化
+      // 3. 选择范围变化（且不在拖拽中）
+      // 4. 鼠标状态变化
+      if (update.docChanged || lineChanged || mouseStateChanged || 
+          (update.selectionSet && !isMouseSelecting)) {
+        this.decorations = createLivePreviewDecorations(update.view, isMouseSelecting);
+        this.lastCursorLine = currentLine;
       }
-      this.hadSelection = hasSelection;
+    }
+    
+    destroy() {
+      document.removeEventListener('mouseup', this.handleMouseUp);
     }
   },
   {
@@ -895,7 +1047,17 @@ const voicePreviewTheme = EditorView.baseTheme({
 });
 
 export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditorProps>(
-  function CodeMirrorEditor({ content, onChange, className = "", isDark = false, livePreview = true }, ref) {
+  function CodeMirrorEditor({ content, onChange, className = "", isDark = false, viewMode, livePreview }, ref) {
+  // 兼容旧的 livePreview prop，优先使用 viewMode
+  const effectiveMode: ViewMode = viewMode ?? (livePreview === false ? 'source' : 'live');
+  const isReadOnly = effectiveMode === 'reading';
+  const shouldRenderWidgets = effectiveMode !== 'source'; // reading 和 live 都渲染 widgets
+  // reading 模式：始终隐藏 tokens（只读，无需显示）
+  // live 模式：隐藏 tokens，但光标/选择行显示
+  // source 模式：始终显示 tokens
+  const shouldHideTokensAlways = effectiveMode === 'reading'; // 阅读模式始终隐藏
+  const shouldHideTokensWithCursor = effectiveMode === 'live'; // 实时模式光标行显示
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const isExternalChange = useRef(false);
@@ -991,24 +1153,31 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
     const state = EditorState.create({
       doc: content,
       extensions: [
+        // 阅读模式设为只读
+        ...(isReadOnly ? [EditorState.readOnly.of(true)] : []),
+        // 鼠标拖拽状态（用于实时模式）
+        mouseSelectingField,
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage }),
         editorTheme,  // 使用 CSS 变量，自动适应主题
         voicePreviewField,
         voicePreviewTheme,
-        // 实时预览模式：隐藏语法标记、渲染数学公式、渲染表格、渲染代码块
-        // 源码模式：显示原始 Markdown
+        // WikiLink 装饰（所有模式都需要）
         wikiLinkStateField,
-        ...(livePreview
+        // 渲染 widgets（reading 和 live 模式）
+        ...(shouldRenderWidgets
           ? [
-              livePreviewPlugin,
               mathStateField,
               tableStateField,
               codeBlockStateField,
               calloutStateField,
             ]
           : []),
+        // 阅读模式：始终隐藏所有语法标记
+        ...(shouldHideTokensAlways ? [readingModePlugin] : []),
+        // 实时模式：隐藏语法标记，光标/选择行除外
+        ...(shouldHideTokensWithCursor ? [livePreviewPlugin] : []),
         markdownStylePlugin,
         updateListener,
         EditorView.lineWrapping,
@@ -1026,7 +1195,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
       view.destroy();
       viewRef.current = null;
     };
-  }, [isDark, livePreview]);
+  }, [isDark, effectiveMode]);
   
   // 同步外部内容变化（只处理真正的外部变更，例如切换文件、撤销等）
   useEffect(() => {
@@ -1172,7 +1341,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
       if (timer) clearTimeout(timer);
       if (currentCleanup) currentCleanup();
     };
-  }, [handleWikiLinkClick, handleBilibiliLinkClick, handleLuminaLinkClick, isDark, livePreview]);
+  }, [handleWikiLinkClick, handleBilibiliLinkClick, handleLuminaLinkClick, isDark, effectiveMode]);
   
   // 监听语音输入事件：灰色流式预览 + 在光标处插入文本
   useEffect(() => {

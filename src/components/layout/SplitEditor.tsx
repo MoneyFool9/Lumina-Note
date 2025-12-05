@@ -4,8 +4,7 @@ import { useUIStore } from "@/stores/useUIStore";
 import { useSplitStore } from "@/stores/useSplitStore";
 import { usePDFAnnotationStore } from "@/stores/usePDFAnnotationStore";
 import { usePDFStore } from "@/stores/usePDFStore";
-import { CodeMirrorEditor } from "@/editor/CodeMirrorEditor";
-import { ReadingView } from "@/editor/ReadingView";
+import { CodeMirrorEditor, ViewMode } from "@/editor/CodeMirrorEditor";
 import { PDFViewer } from "@/components/pdf/PDFViewer";
 import { getFileName, cn } from "@/lib/utils";
 import {
@@ -81,11 +80,11 @@ function EditorPane({
       {/* Editor content */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-3xl mx-auto px-6 py-4">
-          {editorMode === "reading" ? (
-            <ReadingView content={content} />
-          ) : (
-            <CodeMirrorEditor content={content} onChange={onContentChange} />
-          )}
+          <CodeMirrorEditor 
+            content={content} 
+            onChange={onContentChange} 
+            viewMode={editorMode as ViewMode}
+          />
         </div>
       </div>
     </div>
