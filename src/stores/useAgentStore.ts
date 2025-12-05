@@ -415,6 +415,10 @@ export const useAgentStore = create<AgentState>()(
                 case "search":
                   targetMode = "researcher";
                   break;
+                case "flashcard":
+                  // 闪卡意图使用 editor 模式（包含闪卡工具）
+                  targetMode = "editor";
+                  break;
               }
 
               if (targetMode && MODES[targetMode]) {

@@ -120,8 +120,13 @@ TOOL USE
 - create_file → 使用 create_note
 - delete_file → 使用 delete_note
 
+⚠️ **闪卡专用规则**：
+- 创建闪卡时**禁止使用 create_note**
+- 必须使用 create_flashcard 工具
+- 闪卡会自动保存到 Flashcards/ 目录
+
 ✅ **唯一合法的业务工具名**（只能使用这些对笔记/数据库产生实际操作）：
-read_note, edit_note, create_note, delete_note, list_notes, move_note, search_notes, grep_search, semantic_search, query_database, add_database_row, get_backlinks
+read_note, edit_note, create_note, delete_note, list_notes, move_note, search_notes, grep_search, semantic_search, query_database, add_database_row, get_backlinks, generate_flashcards, create_flashcard
 
 此外还有两类**协议动作**，只用于对话包装，不视为业务工具调用：
 - ask_user：在信息不足时向用户询问或确认，格式化你的提问
@@ -166,7 +171,9 @@ CAPABILITIES
 2. 创建新的笔记文件
 3. 编辑现有笔记（精确的查找替换）
 4. 列出目录结构和文件
-5. 完成任务并提供总结
+5. 查询和操作数据库
+6. **生成闪卡**：从笔记内容生成间隔重复学习卡片
+7. 完成任务并提供总结
 
 你不能：
 1. 访问笔记库之外的文件
@@ -207,7 +214,38 @@ RULES
 - **创建新文件**：使用 create_note
   - 仅用于创建不存在的文件
   
-- **禁止**：用 create_note 覆盖已存在的文件（会丢失未修改的内容）`;
+- **禁止**：用 create_note 覆盖已存在的文件（会丢失未修改的内容）
+
+# 闪卡生成规则
+
+当用户要求生成闪卡、制作记忆卡片、或从内容提取知识点用于复习时：
+
+1. **必须使用闪卡工具**，禁止用 create_note 创建普通笔记来代替
+2. **工作流程**：
+   - 先调用 generate_flashcards 分析内容
+   - 然后多次调用 create_flashcard 创建每张卡片
+   - 最后用 attempt_completion 报告结果
+
+3. **卡片类型选择**：
+   - basic: 简单问答（问题 → 答案）
+   - cloze: 填空题（使用 {{c1::答案}} 语法）
+   - mcq: 选择题（多选项）
+   - list: 列表题（按顺序回忆）
+
+4. **示例**：
+<generate_flashcards>
+<content>要生成闪卡的内容</content>
+<deck>牌组名称</deck>
+<types>["basic", "cloze"]</types>
+<count>5</count>
+</generate_flashcards>
+
+<create_flashcard>
+<type>basic</type>
+<deck>牌组名称</deck>
+<front>问题</front>
+<back>答案</back>
+</create_flashcard>`;
 
     // 针对 Writer 模式的特殊规则
     if (context.mode?.slug === "writer") {

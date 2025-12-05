@@ -35,7 +35,8 @@ export class IntentRouter {
 3. "create": 请求创建新笔记、撰写文章、生成大纲。
 4. "edit": 请求修改、重写、修复、格式化现有文本/笔记，或向现有笔记写入新内容。
 5. "organize": 请求整理笔记、创建文件夹、移动文件或清理。
-6. "complex": 多步骤任务、编码、推理或需要深度分析的请求。
+6. "flashcard": 请求生成闪卡、制作记忆卡片、从内容提取知识点用于复习、Anki 卡片。
+7. "complex": 多步骤任务、编码、推理或需要深度分析的请求。
 
 仅输出 JSON：{"type": "intent_type", "confidence": 0.0-1.0, "reasoning": "简短说明"}`;
 

@@ -750,6 +750,184 @@ export const askUserDefinition: ToolDefinition = {
 - 提供多个选择让用户决定`,
 };
 
+// ============ generate_flashcards ============
+
+export const generateFlashcardsDefinition: ToolDefinition = {
+  name: "generate_flashcards",
+  description: "从笔记内容生成闪卡",
+  parameters: [
+    {
+      name: "content",
+      type: "string",
+      required: true,
+      description: "要生成闪卡的源内容",
+    },
+    {
+      name: "source_note",
+      type: "string",
+      required: false,
+      description: "来源笔记路径",
+    },
+    {
+      name: "deck",
+      type: "string",
+      required: false,
+      description: "目标牌组名称，默认 Default",
+    },
+    {
+      name: "types",
+      type: "array",
+      required: false,
+      description: "卡片类型：basic/cloze/basic-reversed/mcq/list",
+    },
+    {
+      name: "count",
+      type: "number",
+      required: false,
+      description: "生成数量，默认 5",
+    },
+  ],
+  definition: `## generate_flashcards
+描述: 从笔记内容生成闪卡。分析内容后会指导你调用 create_flashcard 创建具体卡片。
+
+参数:
+- content: (必需) 要生成闪卡的源内容
+- source_note: (可选) 来源笔记路径，用于建立链接
+- deck: (可选) 目标牌组名称，默认 "Default"
+- types: (可选) 要生成的卡片类型数组，可选值:
+  - basic: 问答卡（问题 → 答案）
+  - cloze: 填空卡（使用 {{c1::答案}} 语法）
+  - basic-reversed: 双向卡（自动生成反向卡）
+  - mcq: 选择题
+  - list: 列表题
+- count: (可选) 生成数量，默认 5
+
+用法:
+<generate_flashcards>
+<content>React Hooks 是 React 16.8 引入的新特性，让函数组件也能使用状态和生命周期。常用的 Hooks 包括：useState 管理状态、useEffect 处理副作用、useContext 访问上下文。</content>
+<deck>编程学习</deck>
+<types>["basic", "cloze"]</types>
+<count>5</count>
+</generate_flashcards>
+
+工作流程:
+1. 调用此工具分析内容
+2. 根据返回的指导，多次调用 create_flashcard 创建卡片
+3. 用 attempt_completion 报告结果`,
+};
+
+// ============ create_flashcard ============
+
+export const createFlashcardDefinition: ToolDefinition = {
+  name: "create_flashcard",
+  description: "创建一张闪卡",
+  parameters: [
+    {
+      name: "type",
+      type: "string",
+      required: true,
+      description: "卡片类型：basic/cloze/basic-reversed/mcq/list",
+    },
+    {
+      name: "deck",
+      type: "string",
+      required: false,
+      description: "牌组名称",
+    },
+    {
+      name: "front",
+      type: "string",
+      required: false,
+      description: "问题/正面（basic/basic-reversed）",
+    },
+    {
+      name: "back",
+      type: "string",
+      required: false,
+      description: "答案/背面（basic/basic-reversed）",
+    },
+    {
+      name: "text",
+      type: "string",
+      required: false,
+      description: "填空文本（cloze），使用 {{c1::答案}} 格式",
+    },
+    {
+      name: "question",
+      type: "string",
+      required: false,
+      description: "问题（mcq/list）",
+    },
+    {
+      name: "options",
+      type: "array",
+      required: false,
+      description: "选项列表（mcq）",
+    },
+    {
+      name: "answer",
+      type: "number",
+      required: false,
+      description: "正确答案索引（mcq）",
+    },
+    {
+      name: "items",
+      type: "array",
+      required: false,
+      description: "列表项（list）",
+    },
+  ],
+  definition: `## create_flashcard
+描述: 创建一张闪卡。卡片会保存为 Markdown 文件到 Flashcards 目录。
+
+参数:
+- type: (必需) 卡片类型
+- deck: (可选) 牌组名称，默认 "Default"
+- 根据类型需要不同参数:
+
+**basic / basic-reversed 类型:**
+- front: 问题/正面
+- back: 答案/背面
+
+**cloze 类型:**
+- text: 包含 {{c1::答案}} 格式的文本
+
+**mcq 类型:**
+- question: 问题
+- options: 选项数组
+- answer: 正确答案索引 (0-based)
+
+**list 类型:**
+- question: 问题
+- items: 列表项数组
+- ordered: 是否需要按顺序
+
+用法示例:
+
+问答卡:
+<create_flashcard>
+<type>basic</type>
+<deck>编程学习</deck>
+<front>React Hooks 是什么时候引入的？</front>
+<back>React 16.8</back>
+</create_flashcard>
+
+填空卡:
+<create_flashcard>
+<type>cloze</type>
+<deck>编程学习</deck>
+<text>{{c1::useState}} 用于在函数组件中管理状态</text>
+</create_flashcard>
+
+选择题:
+<create_flashcard>
+<type>mcq</type>
+<question>以下哪个不是 React Hook？</question>
+<options>["useState", "useEffect", "useClass", "useContext"]</options>
+<answer>2</answer>
+</create_flashcard>`,
+};
+
 // ============ 导出所有定义 ============
 
 export function getAllToolDefinitions(): ToolDefinition[] {
@@ -770,6 +948,8 @@ export function getAllToolDefinitions(): ToolDefinition[] {
     addDatabaseRowDefinition,
     getBacklinksDefinition,
     askUserDefinition,
+    generateFlashcardsDefinition,
+    createFlashcardDefinition,
   ];
 }
 

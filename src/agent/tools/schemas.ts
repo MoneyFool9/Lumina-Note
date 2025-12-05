@@ -382,6 +382,108 @@ export const TOOL_SCHEMAS: FunctionSchema[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "generate_flashcards",
+      description: "从笔记内容生成闪卡（支持问答、填空、选择题等类型）",
+      parameters: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "要生成闪卡的源内容",
+          },
+          source_note: {
+            type: "string",
+            description: "来源笔记路径（可选）",
+          },
+          deck: {
+            type: "string",
+            description: "目标牌组名称，默认 Default",
+          },
+          types: {
+            type: "array",
+            description: "要生成的卡片类型：basic/cloze/basic-reversed/mcq/list",
+            items: { type: "string" },
+          },
+          count: {
+            type: "number",
+            description: "生成数量，默认 5",
+          },
+          language: {
+            type: "string",
+            description: "语言：zh/en",
+          },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_flashcard",
+      description: "创建一张闪卡",
+      parameters: {
+        type: "object",
+        properties: {
+          type: {
+            type: "string",
+            description: "卡片类型：basic/cloze/basic-reversed/mcq/list",
+            enum: ["basic", "cloze", "basic-reversed", "mcq", "list"],
+          },
+          deck: {
+            type: "string",
+            description: "牌组名称",
+          },
+          source: {
+            type: "string",
+            description: "来源笔记链接 [[note]]",
+          },
+          front: {
+            type: "string",
+            description: "问题/正面（basic/basic-reversed）",
+          },
+          back: {
+            type: "string",
+            description: "答案/背面（basic/basic-reversed）",
+          },
+          text: {
+            type: "string",
+            description: "填空文本，使用 {{c1::答案}} 格式（cloze）",
+          },
+          question: {
+            type: "string",
+            description: "问题（mcq/list）",
+          },
+          options: {
+            type: "array",
+            description: "选项列表（mcq）",
+            items: { type: "string" },
+          },
+          answer: {
+            type: "number",
+            description: "正确答案索引 0-based（mcq）",
+          },
+          items: {
+            type: "array",
+            description: "列表项（list）",
+            items: { type: "string" },
+          },
+          ordered: {
+            type: "boolean",
+            description: "是否需要按顺序（list）",
+          },
+          explanation: {
+            type: "string",
+            description: "解释说明（可选）",
+          },
+        },
+        required: ["type"],
+      },
+    },
+  },
 ];
 
 /**

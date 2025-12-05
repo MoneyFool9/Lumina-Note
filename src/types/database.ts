@@ -215,6 +215,30 @@ export const DATABASE_TEMPLATES: Record<string, Partial<Database>> = {
       { id: 'default', name: '表格', type: 'table' }
     ],
   },
+  flashcard: {
+    columns: [
+      { id: 'deck', name: '牌组', type: 'text' },
+      { id: 'type', name: '类型', type: 'select',
+        options: [
+          { id: 'basic', name: '问答', color: 'blue' },
+          { id: 'basic-reversed', name: '双向', color: 'purple' },
+          { id: 'cloze', name: '填空', color: 'green' },
+          { id: 'mcq', name: '选择', color: 'orange' },
+          { id: 'list', name: '列表', color: 'yellow' },
+        ]
+      },
+      { id: 'front', name: '正面', type: 'text' },
+      { id: 'due', name: '到期', type: 'date' },
+      { id: 'ease', name: '难度', type: 'number' },
+      { id: 'interval', name: '间隔', type: 'number' },
+      { id: 'repetitions', name: '重复', type: 'number' },
+      { id: 'source', name: '来源', type: 'text' },
+    ],
+    views: [
+      { id: 'table', name: '表格', type: 'table' },
+      { id: 'kanban', name: '牌组', type: 'kanban', groupBy: 'deck' }
+    ],
+  },
   task: {
     columns: [
       { id: 'title', name: '任务', type: 'text' },

@@ -41,7 +41,7 @@ export interface ModelMeta {
 
 // ============ 意图识别 ============
 
-export type IntentType = "chat" | "search" | "edit" | "create" | "organize" | "complex";
+export type IntentType = "chat" | "search" | "edit" | "create" | "organize" | "flashcard" | "complex";
 
 export interface Intent {
   type: IntentType;

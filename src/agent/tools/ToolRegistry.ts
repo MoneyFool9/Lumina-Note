@@ -23,6 +23,7 @@ import { QueryDatabaseTool } from "./executors/QueryDatabaseTool";
 import { AddDatabaseRowTool } from "./executors/AddDatabaseRowTool";
 import { GetBacklinksTool } from "./executors/GetBacklinksTool";
 import { AskUserTool } from "./executors/AskUserTool";
+import { GenerateFlashcardsTool, CreateFlashcardTool } from "./executors/GenerateFlashcardsTool";
 
 export class ToolRegistry {
   private tools: Map<string, ToolExecutor> = new Map();
@@ -60,6 +61,10 @@ export class ToolRegistry {
     // 交互工具
     this.register(AskUserTool);
     this.register(AttemptCompletionTool);
+    
+    // 闪卡工具
+    this.register(GenerateFlashcardsTool);
+    this.register(CreateFlashcardTool);
   }
 
   /**

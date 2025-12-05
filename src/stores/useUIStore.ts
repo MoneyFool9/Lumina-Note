@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { applyTheme, getThemeById } from "@/lib/themes";
+import { applyTheme, getThemeById } from "@/lib/themePlugin";
 
 // Editor modes similar to Obsidian
 export type EditorMode = "reading" | "live" | "source";

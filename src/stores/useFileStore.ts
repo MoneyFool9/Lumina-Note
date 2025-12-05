@@ -21,7 +21,8 @@ export type TabType =
   | "database"
   | "pdf"
   | "ai-chat"
-  | "webpage";
+  | "webpage"
+  | "flashcard";
 
 // 孤立视图节点信息
 export interface IsolatedNodeInfo {
@@ -47,6 +48,7 @@ export interface Tab {
   databaseId?: string; // 数据库 ID
   webpageUrl?: string; // 网页 URL
   webpageTitle?: string; // 网页标题
+  flashcardDeckId?: string; // 闪卡牌组 ID
 }
 
 interface FileState {
@@ -109,6 +111,7 @@ interface FileState {
   openAIMainTab: () => void;
   openWebpageTab: (url: string, title?: string) => void;
   updateWebpageTab: (tabId: string, url?: string, title?: string) => void;
+  openFlashcardTab: (deckId?: string) => void;
   
   // Undo/Redo actions
   undo: () => void;
@@ -1068,6 +1071,72 @@ export const useFileStore = create<FileState>()(
     });
     
     set({ tabs: updatedTabs });
+  },
+
+  // 打开闪卡标签页
+  openFlashcardTab: (deckId?: string) => {
+    const { tabs, activeTabIndex, currentContent, isDirty, undoStack, redoStack, switchTab } = get();
+
+    // 如果已有闪卡标签页，直接切换
+    const existingIndex = tabs.findIndex(t => t.type === "flashcard");
+    if (existingIndex !== -1) {
+      if (activeTabIndex >= 0 && tabs[activeTabIndex]) {
+        const updatedTabs = [...tabs];
+        updatedTabs[activeTabIndex] = {
+          ...updatedTabs[activeTabIndex],
+          content: currentContent,
+          isDirty,
+          undoStack,
+          redoStack,
+        };
+        // 更新牌组 ID
+        updatedTabs[existingIndex] = {
+          ...updatedTabs[existingIndex],
+          flashcardDeckId: deckId,
+        };
+        set({ tabs: updatedTabs });
+      }
+      switchTab(existingIndex);
+      return;
+    }
+
+    // 生成唯一 ID
+    const tabId = `__flashcard_${Date.now()}__`;
+    
+    // 保存当前标签页状态
+    let updatedTabs = [...tabs];
+    if (activeTabIndex >= 0 && tabs[activeTabIndex]) {
+      updatedTabs[activeTabIndex] = {
+        ...updatedTabs[activeTabIndex],
+        content: currentContent,
+        isDirty,
+        undoStack,
+        redoStack,
+      };
+    }
+    
+    // 创建闪卡标签页
+    const flashcardTab: Tab = {
+      id: tabId,
+      type: "flashcard",
+      path: "",
+      name: "闪卡复习",
+      content: "",
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+      flashcardDeckId: deckId,
+    };
+    
+    updatedTabs.push(flashcardTab);
+    
+    set({
+      tabs: updatedTabs,
+      activeTabIndex: updatedTabs.length - 1,
+      currentFile: null,
+      currentContent: "",
+      isDirty: false,
+    });
   },
 
   // 创建新文件
