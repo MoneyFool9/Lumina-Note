@@ -131,6 +131,11 @@ export function MainAIChatShell() {
   const stopStreaming = useAIStore((state) => state.stopStreaming);
   const checkChatFirstLoad = useAIStore((state) => state.checkFirstLoad);
   const config = useAIStore((state) => state.config);
+  const chatTotalTokens = useAIStore((state) => state.totalTokensUsed);
+  const agentTotalTokens = useAgentStore((state) => {
+    const session = state.sessions.find((s) => s.id === state.currentSessionId);
+    return session?.totalTokensUsed ?? 0;
+  });
 
   useRAGStore();
   useAgentStore();
@@ -363,6 +368,9 @@ export function MainAIChatShell() {
             <History size={14} />
             <span>历史对话</span>
           </button>
+          <span className="ml-3 text-[11px] text-muted-foreground select-none">
+            本会话 Token：{chatMode === "agent" ? agentTotalTokens : chatTotalTokens}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button

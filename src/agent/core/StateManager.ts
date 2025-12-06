@@ -23,6 +23,8 @@ export class StateManager {
       llmConfig: undefined,
       llmRequestStartTime: null,
       llmRequestCount: 0,
+      tokenUsage: { prompt: 0, completion: 0, total: 0 },
+      totalTokensUsed: 0,
     };
   }
 
@@ -54,6 +56,14 @@ export class StateManager {
 
   getLLMRequestCount(): number {
     return this.state.llmRequestCount ?? 0;
+  }
+
+  getTokenUsage() {
+    return this.state.tokenUsage ?? { prompt: 0, completion: 0, total: 0 };
+  }
+
+  getTotalTokensUsed(): number {
+    return this.state.totalTokensUsed ?? 0;
   }
 
   // ============ 状态更新 ============
@@ -121,6 +131,22 @@ export class StateManager {
   resetLLMRequestCount(): void {
     this.state.llmRequestCount = 0;
     this.state.llmRequestStartTime = null;
+  }
+
+  addTokenUsage(usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number }): void {
+    if (!usage) return;
+
+    const prompt = usage.promptTokens ?? 0;
+    const completion = usage.completionTokens ?? 0;
+    const total = usage.totalTokens ?? (prompt + completion);
+
+    const current = this.state.tokenUsage ?? { prompt: 0, completion: 0, total: 0 };
+    this.state.tokenUsage = {
+      prompt: current.prompt + prompt,
+      completion: current.completion + completion,
+      total: current.total + total,
+    };
+    this.state.totalTokensUsed = (this.state.totalTokensUsed ?? 0) + total;
   }
 
   // ============ 重置 ============

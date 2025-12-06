@@ -36,6 +36,13 @@ export interface AgentState {
   // LLM 请求级别的超时检测
   llmRequestStartTime?: number | null;
   llmRequestCount?: number;
+  // Token 统计（当前会话）
+  tokenUsage?: {
+    prompt: number;
+    completion: number;
+    total: number;
+  };
+  totalTokensUsed?: number;
 }
 
 // ============ 工具系统 ============

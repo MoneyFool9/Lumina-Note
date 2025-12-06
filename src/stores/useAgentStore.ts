@@ -28,6 +28,7 @@ interface AgentSession {
   lastError: string | null;
   lastIntent: Intent | null;
   lastRewrittenQuery?: string | null;
+  totalTokensUsed?: number;
 }
 
 function generateAgentSessionTitleFromMessages(messages: Message[], fallback: string = "新对话"): string {
@@ -70,6 +71,9 @@ interface AgentState {
   // 超时检测（LLM 请求级别）
   llmRequestStartTime: number | null;  // 当前 LLM 请求开始时间
   llmRequestCount: number;             // 当前 task 中的 LLM 请求次数（用于幂等重试）
+
+  // Token 统计（当前会话）
+  totalTokensUsed: number;
 
   // 会话
   sessions: AgentSession[];
@@ -171,6 +175,9 @@ export const useAgentStore = create<AgentState>()(
         llmRequestStartTime: null,
         llmRequestCount: 0,
 
+        // Token 统计
+        totalTokensUsed: 0,
+
         // 会话列表
         sessions: [
           {
@@ -183,6 +190,7 @@ export const useAgentStore = create<AgentState>()(
             currentTask: null,
             lastError: null,
             lastIntent: null,
+            totalTokensUsed: 0,
             lastRewrittenQuery: null,
           },
         ],
@@ -665,6 +673,7 @@ export const useAgentStore = create<AgentState>()(
             // 从 AgentLoop 同步 LLM 请求时间和计数
             const llmRequestStartTime = loopState.llmRequestStartTime ?? state.llmRequestStartTime;
             const llmRequestCount = loopState.llmRequestCount ?? state.llmRequestCount;
+            const totalTokensUsed = loopState.totalTokensUsed ?? state.totalTokensUsed;
 
             return {
               status: loopState.status,
@@ -686,10 +695,12 @@ export const useAgentStore = create<AgentState>()(
                     messages: finalMessages,
                     currentTask: loopState.currentTask,
                     lastError: loopState.lastError,
+                    totalTokensUsed,
                     updatedAt: Date.now(),
                   }
                   : s
               ),
+              totalTokensUsed,
             };
           });
 
