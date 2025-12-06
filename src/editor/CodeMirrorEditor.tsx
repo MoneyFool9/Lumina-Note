@@ -21,29 +21,24 @@ import { syntaxTree } from "@codemirror/language";
 import katex from "katex";
 import { common, createLowlight } from "lowlight";
 
-// Initialize lowlight with common languages
+// Initialize lowlight
 const lowlight = createLowlight(common);
 
-/** 编辑器视图模式 */
 export type ViewMode = 'reading' | 'live' | 'source';
 
-// ============ 1. 核心架构：Compartments & Facets ============
+// ============ 1. 核心架构 ============
 
-// Compartments: 用于在不销毁 View 的情况下动态切换配置
-const viewModeCompartment = new Compartment();  // 管理 Widget 和 模式特定的插件
-const readOnlyCompartment = new Compartment();  // 管理只读状态
-const themeCompartment = new Compartment();     // 管理主题 (预留)
+const viewModeCompartment = new Compartment();
+const readOnlyCompartment = new Compartment();
+const themeCompartment = new Compartment();
 
-// Facet: 控制 Widget 的交互行为
-// Reading 模式 -> false (永远渲染 Widget)
-// Live 模式 -> true (选中时塌缩回源码)
+// Facet: 控制是否启用 Live Preview
 const collapseOnSelectionFacet = Facet.define<boolean, boolean>({
   combine: values => values[0] ?? false
 });
 
-// ============ 2. 全局状态管理 ============
+// ============ 2. 全局状态 ============
 
-// 鼠标拖拽状态：用于防止拖拽选择时 Widget 频繁闪烁
 const setMouseSelecting = StateEffect.define<boolean>();
 const mouseSelectingField = StateField.define<boolean>({
   create: () => false,
@@ -59,9 +54,7 @@ interface CodeMirrorEditorProps {
   content: string;
   onChange: (content: string) => void;
   className?: string;
-  isDark?: boolean; // 保留接口定义以兼容父组件传参，但在内部解构时会忽略
   viewMode?: ViewMode;
-  /** @deprecated 使用 viewMode 代替 */
   livePreview?: boolean;
 }
 
@@ -70,236 +63,325 @@ export interface CodeMirrorEditorRef {
   scrollToLine: (line: number) => void;
 }
 
-// ============ 3. 样式定义 (CSS 变量) ============
+// ============ 3. 样式定义 (动画与布局核心) ============
+
 const editorTheme = EditorView.theme({
   "&": { backgroundColor: "transparent", fontSize: "16px", height: "100%" },
   ".cm-content": { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", padding: "16px 0", caretColor: "hsl(var(--primary))" },
   ".cm-line": { padding: "0 16px", paddingLeft: "16px", lineHeight: "1.75", position: "relative" },
-  ".cm-cursor": { borderLeftColor: "hsl(var(--primary))", borderLeftWidth: "2px" },
+  
+  // 选区颜色
   ".cm-selectionBackground": { backgroundColor: "rgba(147, 197, 253, 0.35) !important" },
   "&.cm-focused .cm-selectionBackground": { backgroundColor: "rgba(147, 197, 253, 0.45) !important" },
-  "& ::selection": { backgroundColor: "rgba(147, 197, 253, 0.45) !important" },
-  ".cm-gutters": { display: "none" },
-  // Headers
+  
+  // === 动画核心样式 ===
+  
+  // 1. 悬挂标记 (Headings) - 绝对定位到左侧，不占用正文空间
+  ".cm-formatting-hanging": {
+    position: "absolute",
+    right: "100%", // 悬挂在内容左侧
+    marginRight: "6px",
+    color: "hsl(var(--muted-foreground) / 0.4)",
+    fontFamily: "'JetBrains Mono', monospace",
+    fontWeight: "bold",
+    userSelect: "none",
+    pointerEvents: "none",
+  },
+  
+  // 2. 行内标记 (Bold, Italic) - 默认隐藏 (收缩)
+  ".cm-formatting-inline": {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    whiteSpace: "nowrap",
+    verticalAlign: "baseline",
+    color: "hsl(var(--muted-foreground) / 0.6)",
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: "0.85em",
+    // 关键动画属性：初始宽度为0，透明度为0
+    maxWidth: "0",
+    opacity: "0",
+    transform: "scaleX(0.8)",
+    transition: "max-width 0.2s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.15s ease-out, transform 0.15s ease-out",
+    pointerEvents: "none",
+  },
+  
+  // 3. 行内标记 - 激活状态 (展开)
+  ".cm-formatting-inline-visible": {
+    maxWidth: "4ch", // 足够容纳符号
+    opacity: "1",
+    transform: "scaleX(1)",
+    margin: "0 1px",
+    pointerEvents: "auto",
+  },
+
+  // 隐藏原始标记 (配合悬挂使用)
+  ".cm-formatting-hidden": { display: "none" },
+
+  // === Math 编辑体验 ===
+  ".cm-math-inline": { display: "inline-block", verticalAlign: "middle", cursor: "pointer" },
+  ".cm-math-block": { display: "block", textAlign: "center", padding: "0.5em 0", overflow: "hidden", cursor: "pointer" },
+  
+  // 编辑模式：源码背景 (淡绿色)
+  ".cm-math-source": { 
+    backgroundColor: "rgba(74, 222, 128, 0.15)", 
+    color: "hsl(var(--foreground))", 
+    fontFamily: "'JetBrains Mono', monospace",
+    borderRadius: "4px",
+    padding: "2px 4px",
+    zIndex: "1",
+    position: "relative",
+    cursor: "text"
+  },
+  // 编辑模式：预览面板 (位于源码下方)
+  ".cm-math-preview-panel": {
+    display: "block",
+    textAlign: "center",
+    padding: "8px",
+    marginTop: "4px",
+    marginBottom: "8px",
+    border: "1px solid hsl(var(--border) / 0.5)",
+    borderRadius: "6px",
+    backgroundColor: "hsl(var(--muted) / 0.3)",
+    pointerEvents: "none", // 关键：让鼠标点击穿透面板，避免无法聚焦其他位置
+    userSelect: "none",
+    opacity: 0.95
+  },
+
+  // === Table 样式 ===
+  ".cm-table-widget": { display: "block", overflowX: "auto", cursor: "text" },
+  ".cm-table-source": { fontFamily: "'JetBrains Mono', monospace !important", whiteSpace: "pre", color: "hsl(var(--foreground))", display: "block", overflowX: "auto" },
+  
+  // 基础 Markdown 样式
   ".cm-header-1": { fontSize: "2em", fontWeight: "700", lineHeight: "1.3", color: "hsl(var(--md-heading, var(--foreground)))" },
   ".cm-header-2": { fontSize: "1.5em", fontWeight: "600", lineHeight: "1.4", color: "hsl(var(--md-heading, var(--foreground)))" },
   ".cm-header-3": { fontSize: "1.25em", fontWeight: "600", lineHeight: "1.5", color: "hsl(var(--md-heading, var(--foreground)))" },
-  ".cm-header-4": { fontSize: "1.1em", fontWeight: "600", color: "hsl(var(--md-heading, var(--foreground)))" },
-  ".cm-header-5, .cm-header-6": { fontWeight: "600", color: "hsl(var(--md-heading, var(--foreground)))" },
-  ".cm-line.cm-heading-line": { paddingLeft: "0 !important", marginLeft: "16px" },
-  // Base Syntax
+  ".cm-header-4, .cm-header-5": { fontWeight: "600", color: "hsl(var(--md-heading, var(--foreground)))" },
   ".cm-strong": { fontWeight: "700", color: "hsl(var(--md-bold, var(--foreground)))" },
   ".cm-emphasis": { fontStyle: "italic", color: "hsl(var(--md-italic, var(--foreground)))" },
-  ".cm-strikethrough": { textDecoration: "line-through" },
   ".cm-link": { color: "hsl(var(--md-link, var(--primary)))", textDecoration: "underline" },
-  ".cm-url": { color: "hsl(var(--muted-foreground))" },
-  ".cm-wikilink": { color: "hsl(var(--primary))", textDecoration: "underline", cursor: "text", borderRadius: "2px", transition: "background-color 0.15s ease", "&:hover": { backgroundColor: "hsl(var(--primary) / 0.1)" } },
-  // Code
-  ".cm-code, .cm-inline-code": { backgroundColor: "hsl(var(--md-code-bg, var(--muted)))", color: "hsl(var(--md-code, var(--foreground)))", padding: "2px 4px", borderRadius: "3px", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
-  ".cm-codeblock": { backgroundColor: "hsl(var(--md-code-block-bg, var(--muted)))", color: "hsl(var(--md-code-block, var(--foreground)))" },
-  ".cm-quote": { color: "hsl(var(--md-blockquote, var(--muted-foreground)))", fontStyle: "italic" },
-  ".cm-list-bullet, .cm-list-number": { color: "hsl(var(--md-list-marker, var(--primary)))" },
-  // Formatting Tokens (Hidden/Visible)
-  ".cm-formatting": { color: "hsl(var(--muted-foreground) / 0.6)" },
-  ".cm-formatting-hanging": { position: "absolute", right: "100%", marginRight: "8px", color: "hsl(var(--muted-foreground) / 0.6)", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "0.9em", userSelect: "none", pointerEvents: "none", whiteSpace: "nowrap" },
-  ".cm-formatting-inline": { display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", whiteSpace: "nowrap", verticalAlign: "baseline", color: "hsl(var(--muted-foreground) / 0.6)", fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "0.85em", maxWidth: "0", opacity: "0", transition: "max-width 0.25s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.2s ease-out" },
-  ".cm-formatting-inline-visible": { maxWidth: "4ch", opacity: "1", margin: "0 1px" },
-  ".cm-formatting-hidden": { display: "none" },
-  ".cm-tag, .cm-hashtag": { color: "hsl(var(--md-tag, var(--primary)))" },
-  ".cm-hr": { color: "hsl(var(--md-hr, var(--border)))" },
-  // Math
-  ".cm-math-inline": { display: "inline-block", verticalAlign: "middle" },
-  ".cm-math-block": { display: "block", textAlign: "center", padding: "0.5em 0", overflow: "auto" },
-  ".cm-math-error": { color: "hsl(0 70% 50%)", fontFamily: "monospace" },
-  // Voice
-  ".cm-voice-preview": { color: "hsl(var(--muted-foreground))", opacity: 0.8, fontStyle: "italic" },
+  ".cm-code": { backgroundColor: "hsl(var(--muted))", padding: "2px 4px", borderRadius: "3px", fontFamily: "monospace" },
+  ".cm-wikilink": { color: "hsl(var(--primary))", textDecoration: "underline", cursor: "pointer" },
+  ".cm-voice-preview": { color: "hsl(var(--muted-foreground))", fontStyle: "italic", opacity: 0.8 },
 });
 
-// ============ 4. Widgets 实现 (确保 eq 方法正确) ============
+// ============ 4. Widgets ============
 
 class MathWidget extends WidgetType {
-  constructor(readonly formula: string, readonly displayMode: boolean) { super(); }
-  eq(other: MathWidget) { return other.formula === this.formula && other.displayMode === this.displayMode; }
+  // isPreviewPanel: true = 编辑模式下方的预览面板; false = 预览模式下的替换块
+  constructor(readonly formula: string, readonly displayMode: boolean, readonly isPreviewPanel: boolean = false) { super(); }
+  
+  eq(other: MathWidget) { 
+    return other.formula === this.formula && 
+           other.displayMode === this.displayMode && 
+           other.isPreviewPanel === this.isPreviewPanel; 
+  }
+
   toDOM() {
-    const container = document.createElement("span");
-    container.className = this.displayMode ? "cm-math-block" : "cm-math-inline";
+    const container = document.createElement(this.displayMode || this.isPreviewPanel ? "div" : "span");
+    container.className = this.isPreviewPanel ? "cm-math-preview-panel" : (this.displayMode ? "cm-math-block" : "cm-math-inline");
+    
+    // 只有非预览面板（即渲染态公式）才添加标记，用于点击检测
+    if (!this.isPreviewPanel) {
+        container.dataset.widgetType = "math";
+    }
+    
     try {
-      katex.render(this.formula, container, { displayMode: this.displayMode, throwOnError: false, trust: true, strict: false });
-    } catch (e) { container.textContent = this.formula; container.className += " cm-math-error"; }
+      katex.render(this.formula, container, { displayMode: this.displayMode, throwOnError: false, strict: false });
+    } catch (e) { container.textContent = this.formula; }
     return container;
   }
-  ignoreEvent() { return false; }
+
+  ignoreEvent() { 
+    // 渲染态公式：让 CodeMirror 忽略事件，由我们自己的 mousedown handler 处理
+    // 预览面板：让事件穿透 (pointer-events: none)
+    return !this.isPreviewPanel; 
+  }
 }
 
 class TableWidget extends WidgetType {
   constructor(readonly markdown: string) { super(); }
   eq(other: TableWidget) { return other.markdown === this.markdown; }
   toDOM() {
-    const container = document.createElement("div");
-    container.className = "cm-table-widget reading-view prose max-w-none";
-    container.innerHTML = parseMarkdown(this.markdown);
-    return container;
+    const d = document.createElement("div");
+    d.className = "cm-table-widget reading-view prose max-w-none";
+    d.dataset.widgetType = "table";
+    d.innerHTML = parseMarkdown(this.markdown);
+    return d;
   }
-  ignoreEvent() { return true; } // 阻止光标进入 Widget 内部 DOM
+  ignoreEvent() { return true; }
+}
+
+class HangingMarkWidget extends WidgetType {
+  constructor(readonly mark: string) { super(); }
+  eq(other: HangingMarkWidget) { return other.mark === this.mark; }
+  toDOM() { const s = document.createElement("span"); s.className = "cm-formatting-hanging"; s.textContent = this.mark; return s; }
+  ignoreEvent() { return true; }
 }
 
 class CodeBlockWidget extends WidgetType {
   constructor(readonly code: string, readonly language: string) { super(); }
   eq(other: CodeBlockWidget) { return other.code === this.code && other.language === this.language; }
   toDOM() {
-    const container = document.createElement("div");
-    container.className = "cm-code-block-widget relative group";
-    const pre = document.createElement("pre");
-    const code = document.createElement("code");
-    code.className = "hljs";
-    if (this.language) code.classList.add(`language-${this.language}`);
-    
-    // 使用 lowlight 同步高亮 (Widget 缓存机制保证性能)
-    let highlighted = false;
-    if (this.language) {
-      try {
-        if (lowlight.registered(this.language)) {
-          const tree = lowlight.highlight(this.language, this.code);
-          this.hastToDOM(tree.children, code);
-          highlighted = true;
-        }
-      } catch (e) { console.warn("Highlight error:", e); }
-    }
-    if (!highlighted) code.textContent = this.code;
-    
-    pre.appendChild(code);
-    container.appendChild(pre);
-    if (this.language) {
-      const label = document.createElement("div");
-      label.className = "absolute top-1 right-2 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity select-none pointer-events-none font-sans";
-      label.textContent = this.language;
-      container.appendChild(label);
-    }
-    return container;
+    const c = document.createElement("div");
+    c.className = "cm-code-block-widget relative group rounded-md overflow-hidden border my-2";
+    c.innerHTML = `<pre class="p-3 m-0 bg-muted/50 overflow-auto text-sm"><code class="hljs font-mono ${this.language ? 'language-'+this.language : ''}"></code></pre>`;
+    const codeEl = c.querySelector("code")!;
+    if (this.language && lowlight.registered(this.language)) {
+      try { const tree = lowlight.highlight(this.language, this.code); this.hastToDOM(tree.children, codeEl); } catch {}
+    } else codeEl.textContent = this.code;
+    return c;
   }
   hastToDOM(nodes: any[], parent: HTMLElement) {
     for (const node of nodes) {
-      if (node.type === 'text') parent.appendChild(document.createTextNode(node.value));
-      else if (node.type === 'element') {
-        const el = document.createElement(node.tagName);
-        if (node.properties?.className) el.className = node.properties.className.join(' ');
-        if (node.children) this.hastToDOM(node.children, el);
-        parent.appendChild(el);
-      }
+      if (node.type==='text') parent.appendChild(document.createTextNode(node.value));
+      else if (node.type==='element') { const el=document.createElement(node.tagName); if(node.properties?.className) el.className=node.properties.className.join(' '); if(node.children) this.hastToDOM(node.children, el); parent.appendChild(el); }
     }
   }
   ignoreEvent() { return false; }
 }
 
-class HangingMarkWidget extends WidgetType {
-  constructor(readonly mark: string) { super(); }
-  eq(other: HangingMarkWidget) { return other.mark === this.mark; }
-  toDOM() {
-    const span = document.createElement("span");
-    span.className = "cm-formatting-hanging";
-    span.textContent = this.mark;
-    return span;
-  }
-  ignoreEvent() { return true; }
-}
-
 class CalloutIconWidget extends WidgetType {
   constructor(readonly icon: string) { super(); }
   eq(other: CalloutIconWidget) { return other.icon === this.icon; }
-  toDOM() {
-    const span = document.createElement("span");
-    span.className = "cm-callout-icon";
-    span.textContent = this.icon;
-    span.style.cssText = "margin-right: 6px; font-size: 1.1em;";
-    return span;
-  }
+  toDOM() { const s=document.createElement("span"); s.className="cm-callout-icon"; s.textContent=this.icon; s.style.cssText="margin-right:6px;font-size:1.1em"; return s; }
   ignoreEvent() { return true; }
 }
 
 class VoicePreviewWidget extends WidgetType {
   constructor(readonly text: string) { super(); }
   eq(other: VoicePreviewWidget) { return other.text === this.text; }
-  toDOM() {
-    const span = document.createElement("span");
-    span.className = "cm-voice-preview";
-    span.textContent = this.text;
-    return span;
-  }
+  toDOM() { const s=document.createElement("span"); s.className="cm-voice-preview"; s.textContent=this.text; return s; }
   ignoreEvent() { return true; }
 }
 
-// ============ 5. StateFields (使用 Facet 控制渲染逻辑) ============
+// ============ 5. 核心逻辑: Should Show Source? ============
 
-// 核心逻辑：判断当前区域是否需要显示源码
 const shouldShowSource = (state: EditorState, from: number, to: number): boolean => {
-  // 1. 检查 Facet 配置 (Reading=false, Live=true)
   const shouldCollapse = state.facet(collapseOnSelectionFacet);
-  if (!shouldCollapse) return false; // Reading 模式：始终渲染 Widget
-
-  // 2. 拖拽时保持渲染
+  if (!shouldCollapse) return false;
   if (state.field(mouseSelectingField, false)) return false;
-
-  // 3. 检查光标重叠 (Live 模式)
+  
+  // 只要光标范围接触到目标区域（包含边界），就显示源码
   for (const range of state.selection.ranges) {
     if (range.from <= to && range.to >= from) return true;
   }
   return false;
 };
 
-// WikiLink 始终显示
-const wikiLinkStateField = StateField.define<DecorationSet>({
-  create: buildWikiLinkDecorations,
-  update(deco, tr) { return tr.docChanged ? buildWikiLinkDecorations(tr.state) : deco.map(tr.changes); },
-  provide: f => EditorView.decorations.from(f),
-});
-function buildWikiLinkDecorations(state: EditorState): DecorationSet {
-  const decorations: any[] = [];
-  const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
-  let match;
-  while ((match = wikiLinkRegex.exec(state.doc.toString())) !== null) {
-    decorations.push(Decoration.mark({ class: "cm-wikilink", attributes: { "data-wikilink": match[1].trim() } }).range(match.index, match.index + match[0].length));
-  }
-  return Decoration.set(decorations);
-}
+// ============ 6. StateFields & Plugins ============
 
-const codeBlockStateField = StateField.define<DecorationSet>({
-  create: buildCodeBlockDecorations,
-  update(deco, tr) {
-    // 性能优化：只有在文档变动、选择变动或配置重载时才重新计算
-    // 修复：tr.reconfigured
-    if (tr.docChanged || tr.selection || tr.reconfigured || tr.effects.some(e => e.is(setMouseSelecting))) {
-      return buildCodeBlockDecorations(tr.state);
+/**
+ * 实时预览动画插件：负责行内标记的展开/收起
+ */
+const livePreviewPlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+  constructor(view: EditorView) { this.decorations = this.build(view); }
+  update(u: ViewUpdate) {
+    if (u.docChanged || u.selectionSet || u.viewportChanged || u.transactions.some(t=>t.reconfigured || t.effects.some(e=>e.is(setMouseSelecting)))) {
+      this.decorations = this.build(u.view);
     }
+  }
+  build(view: EditorView) {
+    const d: any[] = [];
+    const { state } = view;
+    // 获取所有活动行
+    const activeLines = new Set<number>();
+    for (const r of state.selection.ranges) {
+      const start = state.doc.lineAt(r.from).number;
+      const end = state.doc.lineAt(r.to).number;
+      for(let l=start; l<=end; l++) activeLines.add(l);
+    }
+    const lineHanging = new Map<number, boolean>();
+    const isDrag = state.field(mouseSelectingField, false);
+
+    syntaxTree(state).iterate({
+      enter: (node) => {
+        if (!["HeaderMark", "EmphasisMark", "StrikethroughMark", "CodeMark", "ListMark", "QuoteMark"].includes(node.name)) return;
+        
+        const isBlock = ["HeaderMark", "ListMark", "QuoteMark"].includes(node.name);
+        const lineNum = state.doc.lineAt(node.from).number;
+        const isActiveLine = activeLines.has(lineNum);
+        
+        if (isBlock) {
+          // 悬挂标记逻辑：活动行显示 Widget，隐藏原始文本
+          if (isActiveLine && !isDrag && !lineHanging.has(lineNum)) {
+            lineHanging.set(lineNum, true);
+            d.push(Decoration.widget({ widget: new HangingMarkWidget(state.doc.sliceString(node.from, node.to)), side: -1 }).range(node.from));
+          }
+          this.hide(state, node.from, node.to, d);
+        } else {
+          // 行内标记逻辑：光标接触时展开
+          if (node.from >= node.to) return;
+          // 判断光标是否接触该 Token
+          const isTouched = shouldShowSource(state, node.from, node.to);
+          
+          const cls = (isTouched && !isDrag) 
+            ? "cm-formatting-inline cm-formatting-inline-visible" 
+            : "cm-formatting-inline";
+            
+          d.push(Decoration.mark({ class: cls }).range(node.from, node.to));
+        }
+      }
+    });
+    return Decoration.set(d.sort((a,b)=>a.from-b.from), true);
+  }
+  hide(state: EditorState, from: number, to: number, d: any[]) {
+    if (from >= to || state.doc.sliceString(from, to).includes('\n')) return;
+    d.push(Decoration.mark({ class: "cm-formatting-hidden" }).range(from, to));
+  }
+}, { decorations: v => v.decorations });
+
+const mathStateField = StateField.define<DecorationSet>({
+  create: buildMathDecorations,
+  update(deco, tr) {
+    if (tr.docChanged || tr.selection || tr.reconfigured || tr.effects.some(e => e.is(setMouseSelecting))) return buildMathDecorations(tr.state);
     return deco.map(tr.changes);
   },
   provide: f => EditorView.decorations.from(f),
 });
-function buildCodeBlockDecorations(state: EditorState): DecorationSet {
+
+function buildMathDecorations(state: EditorState): DecorationSet {
   const decorations: any[] = [];
-  syntaxTree(state).iterate({
-    enter: (node) => {
-      if (node.name === "FencedCode") {
-        if (shouldShowSource(state, node.from, node.to)) return;
-        
-        const text = state.doc.sliceString(node.from, node.to);
-        const lines = text.split('\n');
-        if (lines.length < 2) return;
-        const language = lines[0].replace(/^\s*`{3,}/, "").trim();
-        const codeLines = lines.slice(1);
-        const lastLine = codeLines[codeLines.length - 1];
-        if (lastLine && /^\s*`{3,}\s*$/.test(lastLine)) codeLines.pop();
-        
-        decorations.push(Decoration.replace({ widget: new CodeBlockWidget(codeLines.join('\n'), language), block: true }).range(node.from, node.to));
-      }
-    },
-  });
-  return Decoration.set(decorations);
+  const doc = state.doc.toString();
+  const processed: {from:number, to:number}[] = [];
+  
+  const blockRegex = /\$\$([\s\S]+?)\$\$/g;
+  let match;
+  while ((match = blockRegex.exec(doc)) !== null) {
+    const from = match.index, to = from + match[0].length;
+    processed.push({from, to});
+    const formula = match[1].trim();
+    
+    if (shouldShowSource(state, from, to)) {
+      // 编辑模式：源码高亮 + 预览面板(Preview Panel)
+      decorations.push(Decoration.mark({ class: "cm-math-source" }).range(from, to));
+      decorations.push(Decoration.widget({ widget: new MathWidget(formula, true, true), side: 1, block: true }).range(to));
+    } else {
+      // 预览模式：完整替换
+      const fromLine = state.doc.lineAt(from), toLine = state.doc.lineAt(to);
+      const isFullLine = from === fromLine.from && to === toLine.to;
+      decorations.push(Decoration.replace({ widget: new MathWidget(formula, true), block: isFullLine }).range(from, to));
+    }
+  }
+
+  const inlineRegex = /(?<!\\|\$)\$(?!\$)((?:[^$\n]|\n(?!\n))+?)(?<!\\|\$)\$(?!\$)/g;
+  while ((match = inlineRegex.exec(doc)) !== null) {
+    const from = match.index, to = from + match[0].length;
+    if (processed.some(p => from >= p.from && to <= p.to)) continue;
+    if (shouldShowSource(state, from, to)) {
+       decorations.push(Decoration.mark({ class: "cm-math-source" }).range(from, to));
+    } else {
+       decorations.push(Decoration.replace({ widget: new MathWidget(match[1].trim(), false) }).range(from, to));
+    }
+  }
+  return Decoration.set(decorations.sort((a,b)=>a.from-b.from), true);
 }
 
 const tableStateField = StateField.define<DecorationSet>({
   create: buildTableDecorations,
   update(deco, tr) {
-    // 修复：tr.reconfigured
     if (tr.docChanged || tr.selection || tr.reconfigured || tr.effects.some(e => e.is(setMouseSelecting))) return buildTableDecorations(tr.state);
     return deco.map(tr.changes);
   },
@@ -310,54 +392,84 @@ function buildTableDecorations(state: EditorState): DecorationSet {
   syntaxTree(state).iterate({
     enter: (node) => {
       if (node.name === "Table") {
-        if (shouldShowSource(state, node.from, node.to)) return;
-        decorations.push(Decoration.replace({ widget: new TableWidget(state.doc.sliceString(node.from, node.to)), block: true }).range(node.from, node.to));
+        if (shouldShowSource(state, node.from, node.to)) {
+          decorations.push(Decoration.mark({ class: "cm-table-source" }).range(node.from, node.to));
+        } else {
+          decorations.push(Decoration.replace({ widget: new TableWidget(state.doc.sliceString(node.from, node.to)), block: true }).range(node.from, node.to));
+        }
       }
     },
   });
   return Decoration.set(decorations);
 }
 
-const mathStateField = StateField.define<DecorationSet>({
-  create: buildMathDecorations,
-  update(deco, tr) {
-    // 修复：tr.reconfigured
-    if (tr.docChanged || tr.selection || tr.reconfigured || tr.effects.some(e => e.is(setMouseSelecting))) return buildMathDecorations(tr.state);
-    return deco.map(tr.changes);
-  },
+// Table Keymap
+const tableKeymap = [
+    {
+        key: "Tab",
+        run: (view: EditorView) => {
+            const { state } = view;
+            const { head } = state.selection.main;
+            const line = state.doc.lineAt(head);
+            if (!line.text.includes("|")) return false;
+            const rest = line.text.slice(head - line.from);
+            const nextPipe = rest.indexOf("|");
+            if (nextPipe !== -1) { view.dispatch({ selection: { anchor: head + nextPipe + 2 } }); return true; }
+            return false;
+        }
+    },
+    {
+        key: "Enter",
+        run: (view: EditorView) => {
+            const { state } = view;
+            const { head } = state.selection.main;
+            const line = state.doc.lineAt(head);
+            if (!line.text.includes("|")) return false;
+            const pipes = (line.text.match(/\|/g) || []).length;
+            if (pipes < 2) return false;
+            const row = "\n" + "|  ".repeat(Math.max(1, pipes - 1)) + "|";
+            view.dispatch({ changes: { from: head, insert: row }, selection: { anchor: head + 4 }, scrollIntoView: true });
+            return true;
+        }
+    }
+];
+
+const codeBlockStateField = StateField.define<DecorationSet>({
+  create: buildCodeBlockDecorations,
+  update(deco, tr) { if (tr.docChanged || tr.selection || tr.reconfigured || tr.effects.some(e => e.is(setMouseSelecting))) return buildCodeBlockDecorations(tr.state); return deco.map(tr.changes); },
   provide: f => EditorView.decorations.from(f),
 });
-function buildMathDecorations(state: EditorState): DecorationSet {
-  try {
-    const decorations: any[] = [];
-    const doc = state.doc.toString();
-    const processed: {from:number, to:number}[] = [];
-    
-    // Block $$...$$
-    const blockRegex = /\$\$([\s\S]+?)\$\$/g;
-    let match;
-    while ((match = blockRegex.exec(doc)) !== null) {
-      const from = match.index, to = from + match[0].length;
-      processed.push({from, to});
-      if (shouldShowSource(state, from, to)) continue;
-      const fromLine = state.doc.lineAt(from), toLine = state.doc.lineAt(to);
-      const isFullLine = from === fromLine.from && to === toLine.to;
-      decorations.push(Decoration.replace({ widget: new MathWidget(match[1].trim(), true), block: isFullLine }).range(from, to));
+function buildCodeBlockDecorations(state: EditorState): DecorationSet {
+  const decorations: any[] = [];
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name === "FencedCode") {
+        if (shouldShowSource(state, node.from, node.to)) return;
+        const text = state.doc.sliceString(node.from, node.to);
+        const lines = text.split('\n');
+        if (lines.length < 2) return;
+        const lang = lines[0].replace(/^\s*`{3,}/, "").trim();
+        const code = lines.slice(1, lines.length - 1).join('\n');
+        decorations.push(Decoration.replace({ widget: new CodeBlockWidget(code, lang), block: true }).range(node.from, node.to));
+      }
     }
+  });
+  return Decoration.set(decorations);
+}
 
-    // Inline $...$
-    const inlineRegex = /(?<!\\|\$)\$(?!\$)((?:[^$\n]|\n(?!\n))+?)(?<!\\|\$)\$(?!\$)/g;
-    while ((match = inlineRegex.exec(doc)) !== null) {
-      const from = match.index, to = from + match[0].length;
-      if (processed.some(p => from >= p.from && to <= p.to)) continue;
-      if (shouldShowSource(state, from, to)) continue;
-      const fromLine = state.doc.lineAt(from), toLine = state.doc.lineAt(to);
-      const isFullLine = from === fromLine.from && to === toLine.to;
-      if (fromLine.number !== toLine.number && !isFullLine) continue;
-      decorations.push(Decoration.replace({ widget: new MathWidget(match[1].trim(), isFullLine), block: isFullLine }).range(from, to));
-    }
-    return Decoration.set(decorations.sort((a,b)=>a.from-b.from), true);
-  } catch { return Decoration.none; }
+const wikiLinkStateField = StateField.define<DecorationSet>({
+  create: buildWikiLinkDecorations,
+  update(deco, tr) { return tr.docChanged ? buildWikiLinkDecorations(tr.state) : deco.map(tr.changes); },
+  provide: f => EditorView.decorations.from(f),
+});
+function buildWikiLinkDecorations(state: EditorState): DecorationSet {
+  const decorations: any[] = [];
+  const regex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+  let match;
+  while ((match = regex.exec(state.doc.toString())) !== null) {
+    decorations.push(Decoration.mark({ class: "cm-wikilink", attributes: { "data-wikilink": match[1].trim() } }).range(match.index, match.index + match[0].length));
+  }
+  return Decoration.set(decorations);
 }
 
 const calloutStateField = StateField.define<DecorationSet>({
@@ -380,7 +492,6 @@ function buildCalloutDecorations(state: EditorState): DecorationSet {
     const isEmojiType = !/^\w+$/.test(rawType);
     const color = isEmojiType ? "blue" : (CALLOUT_COLORS[type] || "gray");
     const icon = isEmojiType ? rawType : (CALLOUT_ICONS[type] || "📝");
-    
     const calloutLines = [{from: line.from}];
     let nextLineNo = lineNo + 1;
     while (nextLineNo <= doc.lines) {
@@ -391,10 +502,10 @@ function buildCalloutDecorations(state: EditorState): DecorationSet {
       let cls = `callout callout-${color}`;
       if (idx === 0) {
         cls += " callout-first";
-        const headerMatch = doc.line(lineNo).text.match(/^(>\s*)(\[![^\]]+\])(\s*)/);
-        if (headerMatch) {
-            const start = line.from + headerMatch[1].length;
-            decorations.push(Decoration.replace({ widget: new CalloutIconWidget(icon) }).range(start, start + headerMatch[2].length));
+        const hMatch = doc.line(lineNo).text.match(/^(>\s*)(\[![^\]]+\])(\s*)/);
+        if (hMatch) {
+            const s = line.from + hMatch[1].length;
+            decorations.push(Decoration.replace({ widget: new CalloutIconWidget(icon) }).range(s, s + hMatch[2].length));
         }
       }
       if (idx === calloutLines.length - 1) cls += " callout-last";
@@ -405,17 +516,11 @@ function buildCalloutDecorations(state: EditorState): DecorationSet {
   return Decoration.set(decorations.sort((a,b)=>a.from-b.from), true);
 }
 
-// ============ 6. Plugins (隐藏 Token) ============
-
 const readingModePlugin = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = this.build(view.state); }
   update(u: ViewUpdate) {
-    // 修复：ViewUpdate 没有 reconfigured 属性，需要从 transactions 中检查
-    const reconfigured = u.transactions.some(tr => tr.reconfigured);
-    if (u.docChanged || reconfigured) {
-        this.decorations = this.build(u.state); 
-    }
+    if (u.docChanged || u.transactions.some(tr => tr.reconfigured)) this.decorations = this.build(u.state);
   }
   build(state: EditorState) {
     const d: any[] = [];
@@ -434,60 +539,6 @@ const readingModePlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations });
 
-const livePreviewPlugin = ViewPlugin.fromClass(class {
-  decorations: DecorationSet;
-  constructor(view: EditorView) {
-    this.decorations = this.build(view);
-    view.contentDOM.addEventListener('mousedown', () => view.dispatch({ effects: setMouseSelecting.of(true) }));
-    document.addEventListener('mouseup', () => { if(view.state.field(mouseSelectingField, false)) view.dispatch({ effects: setMouseSelecting.of(false) }); });
-  }
-  update(u: ViewUpdate) {
-    // 修复：ViewUpdate 没有 reconfigured 属性，需要从 transactions 中检查
-    const reconfigured = u.transactions.some(tr => tr.reconfigured);
-    // 只有相关变化才重建
-    if (u.docChanged || u.selectionSet || reconfigured || u.transactions.some(tr => tr.effects.some(e => e.is(setMouseSelecting)))) {
-      this.decorations = this.build(u.view);
-    }
-  }
-  build(view: EditorView) {
-    const d: any[] = [];
-    const { state } = view;
-    const activeLines = new Set<number>();
-    for(const r of state.selection.ranges) {
-      const start = state.doc.lineAt(r.from).number, end = state.doc.lineAt(r.to).number;
-      for(let l=start; l<=end; l++) activeLines.add(l);
-    }
-    const lineHanging = new Map<number, boolean>();
-    
-    syntaxTree(state).iterate({
-      enter: (node) => {
-        if (!["HeaderMark", "EmphasisMark", "StrikethroughMark", "CodeMark", "ListMark", "QuoteMark"].includes(node.name)) return;
-        const line = state.doc.lineAt(node.from).number;
-        const isActive = activeLines.has(line);
-        const isBlock = ["HeaderMark", "ListMark", "QuoteMark"].includes(node.name);
-        
-        if (isBlock) {
-          if (isActive && !lineHanging.has(line)) {
-            lineHanging.set(line, true);
-            d.push(Decoration.widget({ widget: new HangingMarkWidget(state.doc.sliceString(node.from, node.to)), side: -1 }).range(node.from));
-          }
-          this.hide(state, node.from, node.to, d);
-        } else {
-          if (node.from >= node.to || state.doc.lineAt(node.from).number !== state.doc.lineAt(node.to).number) return;
-          const cls = isActive ? "cm-formatting-inline cm-formatting-inline-visible" : "cm-formatting-inline";
-          d.push(Decoration.mark({ class: cls }).range(node.from, node.to));
-        }
-      }
-    });
-    return Decoration.set(d.sort((a,b)=>a.from-b.from), true);
-  }
-  hide(state: EditorState, from: number, to: number, d: any[]) {
-    if (from >= to || state.doc.sliceString(from, to).includes('\n')) return;
-    d.push(Decoration.mark({ class: "cm-formatting-hidden" }).range(from, to));
-  }
-}, { decorations: v => v.decorations });
-
-// Markdown Style
 const markdownStylePlugin = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = this.build(view); }
@@ -501,7 +552,6 @@ const markdownStylePlugin = ViewPlugin.fromClass(class {
           "ATXHeading1": "cm-header-1", "ATXHeading2": "cm-header-2", "ATXHeading3": "cm-header-3", "ATXHeading4": "cm-header-4", 
           "StrongEmphasis": "cm-strong", "Emphasis": "cm-emphasis", "Strikethrough": "cm-strikethrough", "InlineCode": "cm-code", "Link": "cm-link", "URL": "cm-url" 
         };
-        // Header 5/6 fallback to 4
         if (type.startsWith("ATXHeading")) {
           const cls = map[type] || "cm-header-4";
           d.push(Decoration.mark({ class: cls }).range(node.from, node.to));
@@ -515,7 +565,6 @@ const markdownStylePlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations });
 
-// Voice Preview
 const setVoicePreview = StateEffect.define<{ from: number; text: string }>();
 const clearVoicePreview = StateEffect.define<null | void>();
 const voicePreviewField = StateField.define<DecorationSet>({
@@ -531,12 +580,11 @@ const voicePreviewField = StateField.define<DecorationSet>({
   provide: f => EditorView.decorations.from(f),
 });
 
-// ============ 7. React 组件 ============
+// ============ 9. React 组件 ============
 
 export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditorProps>(
   function CodeMirrorEditor({ content, onChange, className = "", viewMode, livePreview }, ref) {
     
-    // 兼容逻辑
     const effectiveMode: ViewMode = viewMode ?? (livePreview === false ? 'source' : 'live');
     const isReadOnly = effectiveMode === 'reading';
 
@@ -549,49 +597,42 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
     const { openSecondaryPdf } = useSplitStore();
     const { setSplitView } = useUIStore();
 
-    // 根据模式加载不同插件 (Source模式下卸载重型Widget)
     const getModeExtensions = useCallback((mode: ViewMode) => {
       const widgets = [mathStateField, tableStateField, codeBlockStateField, calloutStateField];
       switch (mode) {
         case 'reading': return [collapseOnSelectionFacet.of(false), readingModePlugin, ...widgets];
         case 'live': return [collapseOnSelectionFacet.of(true), livePreviewPlugin, ...widgets];
-        case 'source': default: return [calloutStateField]; // Source 模式只保留 Callout 颜色条，卸载其他
+        case 'source': default: return [calloutStateField]; 
       }
     }, []);
 
     useImperativeHandle(ref, () => ({
       getScrollLine: () => {
-        const view = viewRef.current;
-        if (!view) return 1;
-        const pos = view.lineBlockAtHeight(view.scrollDOM.scrollTop).from;
-        return view.state.doc.lineAt(pos).number;
+        if (!viewRef.current) return 1;
+        const pos = viewRef.current.lineBlockAtHeight(viewRef.current.scrollDOM.scrollTop).from;
+        return viewRef.current.state.doc.lineAt(pos).number;
       },
       scrollToLine: (line: number) => {
-        const view = viewRef.current;
-        if (!view) return;
-        const target = Math.min(Math.max(1, line), view.state.doc.lines);
-        view.dispatch({ effects: EditorView.scrollIntoView(view.state.doc.line(target).from, { y: "start" }) });
+        if (!viewRef.current) return;
+        const target = Math.min(Math.max(1, line), viewRef.current.state.doc.lines);
+        viewRef.current.dispatch({ effects: EditorView.scrollIntoView(viewRef.current.state.doc.line(target).from, { y: "start" }) });
       }
     }), []);
 
-    // 1. 初始化 EditorView (只执行一次)
     useEffect(() => {
       if (!containerRef.current) return;
 
       const state = EditorState.create({
         doc: content,
         extensions: [
-          // 隔舱配置
           viewModeCompartment.of(getModeExtensions(effectiveMode)),
           readOnlyCompartment.of(EditorState.readOnly.of(isReadOnly)),
           themeCompartment.of([]),
-          // 基础功能
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          keymap.of([...tableKeymap, ...defaultKeymap, ...historyKeymap]),
           markdown({ base: markdownLanguage }),
           EditorView.lineWrapping,
           editorTheme,
-          // 状态
           mouseSelectingField,
           wikiLinkStateField,
           voicePreviewField,
@@ -610,15 +651,60 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
       const view = new EditorView({ state, parent: containerRef.current });
       viewRef.current = view;
 
+      // Click Handler for Widgets
+      const handleClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        const view = viewRef.current;
+        if (!view) return;
+
+        // 1. Math/Table Widget 点击 -> 聚焦源码
+        const widgetDom = target.closest('[data-widget-type="math"], [data-widget-type="table"]');
+        if (widgetDom) {
+           const pos = view.posAtDOM(widgetDom);
+           if (pos !== null) {
+              e.preventDefault();
+              view.focus();
+              // 强制将光标置入 Widget 内部 (pos + 1)，确保触发 shouldShowSource -> true
+              view.dispatch({ selection: { anchor: pos + 1 } });
+              return;
+           }
+        }
+        
+        // 2. Links
+        const link = target.closest('a[href]');
+        if (link?.getAttribute('href')?.startsWith('lumina://pdf')) {
+          e.preventDefault(); e.stopPropagation();
+          const parsed = parseLuminaLink(link.getAttribute('href')!);
+          if (parsed?.file) (e.ctrlKey || e.metaKey) ? (setSplitView(true), openSecondaryPdf(parsed.file, parsed.page||1, parsed.id)) : openPDFTab(parsed.file);
+          return;
+        }
+
+        const wikiEl = target.closest(".cm-wikilink");
+        if (wikiEl && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault(); e.stopPropagation();
+          const name = wikiEl.getAttribute("data-wikilink");
+          if (name) {
+             const find = (arr: any[]): string|null => { for(const i of arr) { if(!i.is_dir && i.name.replace(".md","").toLowerCase() === name.toLowerCase()) return i.path; if(i.is_dir) { const r = find(i.children); if(r) return r; } } return null; };
+             const path = find(fileTree);
+             path ? openFile(path) : console.log(`Not found: ${name}`);
+          }
+          return;
+        }
+
+        if ((e.ctrlKey || e.metaKey) && link) {
+           const h = link.getAttribute('href')!;
+           if (h.includes('bilibili') || h.includes('b23.tv')) { e.preventDefault(); e.stopPropagation(); openVideoNoteTab(h); return; }
+        }
+      };
+
+      view.contentDOM.addEventListener('mousedown', handleClick);
       return () => { view.destroy(); viewRef.current = null; };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); 
 
-    // 2. 模式切换 (使用 reconfigure 而非重建)
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
-      
       view.dispatch({
         effects: [
           viewModeCompartment.reconfigure(getModeExtensions(effectiveMode)),
@@ -627,7 +713,6 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
       });
     }, [effectiveMode, isReadOnly, getModeExtensions]);
 
-    // 3. 外部内容同步
     useEffect(() => {
       const view = viewRef.current;
       if (!view || content === lastInternalContent.current) return;
@@ -641,60 +726,6 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
       }
     }, [content]);
 
-    // 4. 事件监听 (Click, Voice, AI) - 绑定到 ContentDOM
-    useEffect(() => {
-      const view = viewRef.current;
-      if (!view) return;
-
-      const handleClicks = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const link = target.closest('a[href]');
-        
-        // Lumina PDF
-        if (link?.getAttribute('href')?.startsWith('lumina://pdf')) {
-          e.preventDefault(); e.stopPropagation();
-          const parsed = parseLuminaLink(link.getAttribute('href')!);
-          if (parsed?.file) (e.ctrlKey || e.metaKey) ? (setSplitView(true), openSecondaryPdf(parsed.file, parsed.page||1, parsed.id)) : openPDFTab(parsed.file);
-          return;
-        }
-
-        // WikiLink
-        const wikiEl = target.closest(".cm-wikilink");
-        if (wikiEl && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault(); e.stopPropagation();
-          const name = wikiEl.getAttribute("data-wikilink");
-          if (name) {
-            // 简单遍历查找逻辑
-            const find = (arr: any[]): string|null => { for(const i of arr) { if(!i.is_dir && i.name.replace(".md","").toLowerCase() === name.toLowerCase()) return i.path; if(i.is_dir) { const r = find(i.children); if(r) return r; } } return null; };
-            const path = find(fileTree);
-            path ? openFile(path) : console.log(`Not found: ${name}`);
-          }
-          return;
-        }
-
-        // Bilibili
-        if (e.ctrlKey || e.metaKey) {
-           if (link) {
-             const h = link.getAttribute('href')!;
-             if (h.includes('bilibili') || h.includes('b23.tv')) { e.preventDefault(); e.stopPropagation(); openVideoNoteTab(h); return; }
-           }
-           // Scan text for link
-           const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
-           if (pos !== null) {
-              const txt = view.state.doc.sliceString(Math.max(0, pos-100), Math.min(view.state.doc.length, pos+100));
-              const m = /(https?:\/\/)?(www\.)?(bilibili\.com\/video\/[A-Za-z0-9]+|b23\.tv\/[A-Za-z0-9]+)/.exec(txt);
-              if (m && pos >= Math.max(0, pos-100)+m.index && pos <= Math.max(0, pos-100)+m.index+m[0].length) {
-                 e.preventDefault(); e.stopPropagation(); openVideoNoteTab(m[0].startsWith('http') ? m[0] : 'https://'+m[0]);
-              }
-           }
-        }
-      };
-
-      view.contentDOM.addEventListener('click', handleClicks);
-      return () => view.contentDOM.removeEventListener('click', handleClicks);
-    }, [fileTree, openFile, openPDFTab, openSecondaryPdf, openVideoNoteTab, setSplitView]);
-
-    // Voice & AI Handlers
     useEffect(() => {
       const onVoiceInt = (e: any) => viewRef.current?.dispatch({ effects: e.detail?.text ? setVoicePreview.of({from: viewRef.current.state.selection.main.head, text: e.detail.text}) : clearVoicePreview.of(null) });
       const onVoiceFin = (e: any) => { if(e.detail?.text && viewRef.current) { const p = viewRef.current.state.selection.main.head; viewRef.current.dispatch({ changes: {from:p, to:p, insert:e.detail.text}, selection: {anchor: p+e.detail.text.length}, effects: clearVoicePreview.of(null) }); }};
