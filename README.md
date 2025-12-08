@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/lumina.svg" alt="Lumina Note Logo" width="120" height="120" />
+<img src="src-tauri/icons/icon.png" alt="Lumina Note Logo" width="120" height="120" />
 
 # ✨ Lumina Note
 
