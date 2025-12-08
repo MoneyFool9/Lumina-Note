@@ -40,13 +40,14 @@ Lumina Note is not just a Markdown editor – it is an **LLM-native knowledge wo
 ### 📝 Immersive Editing
 
 - **Three editor modes**: **Source / Live Preview / Reading**
-- **WikiLinks**: `[[WikiLinks]]` to build a graph-like knowledge network
+- **WikiLinks**: `[[WikiLinks]]` to build a graph-like knowledge network, supports drag-and-drop from file tree
 - **Beautiful formatting**: LaTeX math (KaTeX), Mermaid, Obsidian-style callouts `> [!info]`
 - **Syntax highlighting**: CodeMirror 6 with hundreds of languages
 - **Split view editor**:
   - Horizontal / vertical split
   - Draggable divider with live resize
   - **Active pane tracking**: the pane you clicked last becomes the target when opening files
+- **Image paste**: `Ctrl+V` to paste screenshots directly into editor, auto-saved to vault
 
 ### 🕸️ Knowledge Graph
 
@@ -291,6 +292,42 @@ See the Chinese README or `docs/` for more implementation details. In short:
 - **Frontend**: React 18 + TypeScript + Tailwind + Zustand + CodeMirror 6
 - **Backend**: Tauri v2 + Rust commands for filesystem and vector DB
 - **RAG**: SQLite-based vector store, multiple embedding backends, optional reranker
+
+---
+
+## 🗺️ Roadmap
+
+### ✅ Completed
+
+- [x] **Core**: Multi-provider LLM support (8 providers)
+- [x] **Agent**: AI Agent system with tool calling (4 modes + 14 tools)
+- [x] **RAG**: Local vector database with semantic search (+ Reranker)
+- [x] **UI**: AI floating ball with streaming responses
+- [x] **Video**: Bilibili video notes (embedded WebView + danmaku sync)
+- [x] **STT**: Voice-to-text (streaming + auto-stop + recording animation)
+- [x] **Theme**: 15 built-in themes + Markdown color customization
+- [x] **Settings**: Central modal settings panel
+- [x] **PDF**: Smart PDF reader (element detection + interactive selection + AI chat)
+- [x] **PDF Annotations**: Highlight/underline/notes, Markdown storage, bi-directional jump
+- [x] **Split Editor**: Resizable split panes with active panel tracking
+- [x] **Database**: Dataview-style YAML-driven table/kanban views
+- [x] **Image Paste**: Paste screenshots directly into editor, auto-save to vault
+- [x] **Drag-and-drop WikiLinks**: Drag files from tree to editor to insert `[[WikiLink]]`
+
+### 🚧 In Progress
+
+- [ ] **PDF Rust Migration**: Port Python PDF parsing service to Rust
+- [ ] **Calendar View**: Calendar view for databases
+
+### 📋 Planned
+
+- [ ] **Backlinks Panel**: Show which notes reference the current note
+- [ ] **Tag Aggregation**: Click tags to navigate, tag management page
+- [ ] **Template System**: Choose templates when creating new notes
+- [ ] **Export**: Export to PDF / HTML / Word
+- [ ] **Plugin System**: Plugin API design
+- [ ] **Sync**: WebDAV / Git sync support
+- [ ] **Mobile**: iOS / Android adaptation
 
 ---
 

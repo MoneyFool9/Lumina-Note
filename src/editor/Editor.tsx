@@ -4,6 +4,7 @@ import { useUIStore, EditorMode } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { MainAIChatShell } from "@/components/layout/MainAIChatShell";
+import { LocalGraph } from "@/components/effects/LocalGraph";
 import { debounce, getFileName } from "@/lib/utils";
 import { CodeMirrorEditor, CodeMirrorEditorRef, ViewMode } from "./CodeMirrorEditor";
 import { SelectionToolbar } from "@/components/toolbar/SelectionToolbar";
@@ -355,11 +356,19 @@ export function Editor() {
         <MainAIChatShell />
       ) : (
         // 普通笔记编辑视图
-        <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
-          {/* Selection Toolbar - Add to Chat */}
-          <SelectionToolbar containerRef={scrollContainerRef} />
+        <div className="flex-1 overflow-hidden relative">
+          {/* 局部知识图谱 - 悬浮在右上角，不随滚动 */}
+          {currentFile?.endsWith('.md') && (
+            <div className="absolute top-3 right-3 w-80 h-56 bg-background/90 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg z-20 overflow-hidden">
+              <LocalGraph className="w-full h-full" />
+            </div>
+          )}
           
-          <div className="max-w-3xl mx-auto px-6 py-4 editor-mode-container">
+          <div ref={scrollContainerRef} className="h-full overflow-auto">
+            {/* Selection Toolbar - Add to Chat */}
+            <SelectionToolbar containerRef={scrollContainerRef} />
+          
+            <div className="max-w-3xl mx-auto px-6 py-4 editor-mode-container">
               {isVideoNoteFile && (
                 <div className="mb-3 flex items-center justify-between px-3 py-2 bg-blue-500/5 border border-blue-500/30 rounded-md text-xs text-blue-700 dark:text-blue-300">
                   <span>检测到这是一个视频笔记 Markdown，可以在专用的视频笔记视图中查看和编辑。</span>
@@ -382,6 +391,7 @@ export function Editor() {
                 }}
                 viewMode={editorMode as ViewMode}
               />
+            </div>
             </div>
           </div>
         </div>
