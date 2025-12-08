@@ -7,6 +7,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { useFileStore } from "@/stores/useFileStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { ChatInput } from "./ChatInput";
 import { AgentMessageRenderer } from "./AgentMessageRenderer";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 
 export function AgentPanel() {
+  const { t } = useLocaleStore();
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { isRecording, interimText, toggleRecording } = useSpeechToText((text: string) => {
@@ -84,7 +86,7 @@ export function AgentPanel() {
           <button
             onClick={clearChat}
             className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-            title="清空对话"
+            title={t.panel.clearChat}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -96,8 +98,8 @@ export function AgentPanel() {
         {/* 欢迎消息 */}
         {messages.length === 0 && (
           <div className="text-sm text-muted-foreground leading-relaxed">
-            <p>我是 Lumina Agent，告诉我你想完成的任务。</p>
-            <p className="mt-2 text-xs opacity-70">输入任务指令开始</p>
+            <p>{t.ai.welcomeAgent}</p>
+            <p className="mt-2 text-xs opacity-70">{t.ai.startTask}</p>
           </div>
         )}
 
@@ -127,14 +129,14 @@ export function AgentPanel() {
         {status === "running" && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>思考中...</span>
+            <span>{t.ai.thinking}</span>
           </div>
         )}
 
         {/* 错误状态 */}
         {status === "error" && (
           <div className="text-sm text-red-500 p-2 bg-red-500/10 rounded">
-            发生错误，请重试
+            {t.ai.errorRetry}
           </div>
         )}
 
@@ -151,10 +153,10 @@ export function AgentPanel() {
                 });
               }}
               className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
-              title="重新生成"
+              title={t.ai.regenerate}
             >
               <RefreshCw size={12} />
-              重新生成
+              {t.ai.regenerate}
             </button>
           </div>
         )}
@@ -174,13 +176,13 @@ export function AgentPanel() {
             isLoading={status === "running"}
             isStreaming={status === "running"}
             onStop={abort}
-            placeholder="输入任务指令... (@ 引用文件)"
+            placeholder={t.ai.agentPlaceholder}
             rows={3}
             hideSendButton={true}
           />
           <div className="flex items-center mt-2 gap-2">
             <div className="flex gap-2 items-center text-xs text-muted-foreground shrink-0">
-              <span>@ 添加文件</span>
+              <span>{t.ai.addFile}</span>
             </div>
             {/* 流式显示中间识别结果 */}
             <div className="flex-1 truncate text-sm text-foreground/70 italic">
@@ -194,7 +196,7 @@ export function AgentPanel() {
                     ? "bg-red-500/20 border-red-500 text-red-500"
                     : "bg-background border-border text-muted-foreground hover:bg-accent"
                   }`}
-                title={isRecording ? "停止语音输入" : "开始语音输入"}
+                title={isRecording ? t.ai.stopVoice : t.ai.startVoice}
               >
                 {isRecording && (
                   <span className="absolute inset-0 rounded-md animate-ping bg-red-500/30" />
@@ -208,7 +210,7 @@ export function AgentPanel() {
                     ? "bg-red-500 hover:bg-red-600 text-white"
                     : "bg-primary hover:bg-primary/90 text-primary-foreground"
                   } disabled:opacity-50 rounded p-1.5 transition-colors flex items-center justify-center`}
-                title={status === "running" ? "停止" : "发送"}
+                title={status === "running" ? t.ai.stop : t.ai.send}
               >
                 {status === "running" ? (
                   <Square size={14} fill="currentColor" />
@@ -237,15 +239,16 @@ function ToolApproval({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const { t } = useLocaleStore();
   return (
     <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
       <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
         <AlertCircle className="w-4 h-4" />
-        <span className="font-medium">需要审批</span>
+        <span className="font-medium">{t.ai.needApproval}</span>
       </div>
       <div className="text-sm text-foreground mb-3">
         <p className="mb-1">
-          工具: <code className="px-1 py-0.5 bg-muted rounded">{toolName}</code>
+          {t.ai.tool}: <code className="px-1 py-0.5 bg-muted rounded">{toolName}</code>
         </p>
         <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
           {JSON.stringify(params, null, 2)}
@@ -258,7 +261,7 @@ function ToolApproval({
                      text-white text-sm rounded"
         >
           <Check className="w-3 h-3" />
-          批准
+          {t.ai.approve}
         </button>
         <button
           onClick={onReject}
@@ -266,7 +269,7 @@ function ToolApproval({
                      text-foreground text-sm rounded"
         >
           <X className="w-3 h-3" />
-          拒绝
+          {t.ai.reject}
         </button>
       </div>
     </div>

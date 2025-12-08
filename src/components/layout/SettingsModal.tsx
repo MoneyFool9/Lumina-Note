@@ -9,6 +9,7 @@ import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useBrowserStore } from "@/stores/useBrowserStore";
 import { useFileStore } from "@/stores/useFileStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { OFFICIAL_THEMES, Theme } from "@/lib/themes";
 import { loadUserThemes, getUserThemes, deleteUserTheme } from "@/lib/themePlugin";
 import { X, Check, Plus, Trash2, Palette } from "lucide-react";
@@ -21,6 +22,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const { t } = useLocaleStore();
   const { themeId, setThemeId, editorMode, setEditorMode } = useUIStore();
   const { config } = useAIStore();
   const { hideAllWebViews, showAllWebViews } = useBrowserStore();
@@ -51,7 +53,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   // 删除用户主题
   const handleDeleteTheme = async (theme: Theme) => {
     if (!vaultPath) return;
-    if (confirm(`确定删除主题 "${theme.name}" 吗？`)) {
+    if (confirm(t.settingsModal.confirmDeleteTheme.replace('{name}', theme.name))) {
       await deleteUserTheme(vaultPath, theme.id);
       setUserThemes(getUserThemes());
       // 如果删除的是当前主题，切换到默认
@@ -124,7 +126,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)",
           }}
         >
-          <h2 className="text-lg font-semibold text-foreground/90">设置</h2>
+          <h2 className="text-lg font-semibold text-foreground/90">{t.settingsModal.title}</h2>
           <button
             onClick={onClose}
             className="p-2 rounded-full transition-all hover:scale-110"
@@ -148,7 +150,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                主题
+                {t.settingsModal.theme}
               </h3>
               <button
                 onClick={handleNewTheme}
@@ -159,15 +161,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 }}
               >
                 <Plus size={14} />
-                创建主题
+                {t.settingsModal.createTheme}
               </button>
             </div>
-            <p className="text-sm text-muted-foreground">选择界面配色方案，每套主题自动适配浅色/深色模式</p>
+            <p className="text-sm text-muted-foreground">{t.settingsModal.themeDescription}</p>
             
             {/* 用户主题 */}
             {userThemes.length > 0 && (
               <>
-                <p className="text-xs text-muted-foreground mt-4">我的主题</p>
+                <p className="text-xs text-muted-foreground mt-4">{t.settingsModal.myThemes}</p>
                 <div className="grid grid-cols-3 gap-3">
                   {userThemes.map((theme) => (
                     <div
@@ -214,14 +216,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         <button
                           onClick={() => handleEditTheme(theme)}
                           className="p-1 rounded hover:bg-white/20"
-                          title="编辑"
+                          title={t.common.edit}
                         >
                           <Palette size={12} />
                         </button>
                         <button
                           onClick={() => handleDeleteTheme(theme)}
                           className="p-1 rounded hover:bg-red-500/20 text-red-400"
-                          title="删除"
+                          title={t.common.delete}
                         >
                           <Trash2 size={12} />
                         </button>
@@ -240,7 +242,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             )}
             
             {/* 官方主题 */}
-            <p className="text-xs text-muted-foreground mt-4">官方主题</p>
+            <p className="text-xs text-muted-foreground mt-4">{t.settingsModal.officialThemes}</p>
             <div className="grid grid-cols-3 gap-3">
               {OFFICIAL_THEMES.map((theme) => (
                 <button
@@ -292,14 +294,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* 编辑器设置 */}
           <section className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              编辑器
+              {t.settingsModal.editor}
             </h3>
             
             {/* 编辑模式 */}
             <div className="flex items-center justify-between py-2">
               <div>
-                <p className="font-medium">默认编辑模式</p>
-                <p className="text-sm text-muted-foreground">打开文件时的默认视图</p>
+                <p className="font-medium">{t.settingsModal.defaultEditMode}</p>
+                <p className="text-sm text-muted-foreground">{t.settingsModal.defaultEditModeDesc}</p>
               </div>
               <select
                 value={editorMode}
@@ -311,9 +313,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   backdropFilter: "blur(10px)",
                 }}
               >
-                <option value="live">实时预览</option>
-                <option value="source">源码模式</option>
-                <option value="reading">阅读模式</option>
+                <option value="live">{t.settingsModal.livePreview}</option>
+                <option value="source">{t.settingsModal.sourceMode}</option>
+                <option value="reading">{t.settingsModal.readingMode}</option>
               </select>
             </div>
           </section>
@@ -321,13 +323,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* AI 设置预览 */}
           <section className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              AI 助手
+              {t.settingsModal.aiAssistant}
             </h3>
             
             <div className="flex items-center justify-between py-2">
               <div>
-                <p className="font-medium">当前模型</p>
-                <p className="text-sm text-muted-foreground">在右侧面板中配置更多选项</p>
+                <p className="font-medium">{t.settingsModal.currentModel}</p>
+                <p className="text-sm text-muted-foreground">{t.settingsModal.configInRightPanel}</p>
               </div>
               <span 
                 className="text-sm text-foreground/70 px-3 py-1.5 rounded-lg"
@@ -336,7 +338,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   border: "1px solid rgba(255,255,255,0.1)",
                 }}
               >
-                {config.model || "未配置"}
+                {config.model || t.settingsModal.notConfigured}
               </span>
             </div>
           </section>
@@ -344,13 +346,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* 关于 */}
           <section className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              关于
+              {t.settingsModal.about}
             </h3>
             
             <div className="flex items-center justify-between py-2">
               <div>
                 <p className="font-medium">Lumina Note</p>
-                <p className="text-sm text-muted-foreground">本地优先的 AI 驱动笔记应用</p>
+                <p className="text-sm text-muted-foreground">{t.settingsModal.appDescription}</p>
               </div>
               <span className="text-sm text-muted-foreground">
                 v0.1.0

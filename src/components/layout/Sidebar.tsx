@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useFileStore } from "@/stores/useFileStore";
 import { useRAGStore } from "@/stores/useRAGStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { FileEntry, deleteFile, renameFile, createFile, createDir, exists, openNewWindow, saveFile } from "@/lib/tauri";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -43,6 +44,7 @@ interface CreatingState {
 }
 
 export function Sidebar() {
+  const { t } = useLocaleStore();
   const { vaultPath, fileTree, currentFile, openFile, refreshFileTree, isLoadingTree, closeFile, openDatabaseTab, openPDFTab, tabs, activeTabIndex } =
     useFileStore();
   const { config: ragConfig, isIndexing: ragIsIndexing, indexStatus, rebuildIndex, cancelIndex } = useRAGStore();
@@ -89,7 +91,7 @@ export function Sidebar() {
       openFile(filePath);
     } catch (error) {
       console.error("Failed to create quick note:", error);
-      alert("创建速记失败");
+      alert(t.file.createQuickNoteFailed);
     }
   }, [vaultPath, refreshFileTree, openFile]);
   
@@ -142,7 +144,7 @@ export function Sidebar() {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: "选择工作目录",
+        title: t.file.selectWorkingDir,
       });
       
       if (selected && typeof selected === "string") {
@@ -166,12 +168,12 @@ export function Sidebar() {
   const getMoreMenuItems = useCallback((): MenuItem[] => {
     return [
       {
-        label: "打开文件夹...",
+        label: t.file.openFolder,
         icon: <FolderOpen size={14} />,
         onClick: handleOpenFolder,
       },
       {
-        label: "新窗口",
+        label: t.file.newWindow,
         icon: <AppWindow size={14} />,
         onClick: handleNewWindow,
       },
@@ -227,7 +229,7 @@ export function Sidebar() {
       updateTabPath(renamingPath, newPath);
     } catch (error) {
       console.error("Rename failed:", error);
-      alert("重命名失败");
+      alert(t.file.renameFailed);
     }
     setRenamingPath(null);
   }, [renamingPath, renameValue, refreshFileTree, currentFile, openFile]);
@@ -250,9 +252,9 @@ export function Sidebar() {
       // 降级：复制路径
       try {
         await navigator.clipboard.writeText(path);
-        alert(`打开失败，路径已复制：${path}`);
+        alert(`${t.file.openFailed}: ${path}`);
       } catch {
-        alert(`打开失败：${error}`);
+        alert(`${t.common.error}: ${error}`);
       }
     }
   }, []);
@@ -356,7 +358,7 @@ export function Sidebar() {
     // 检查是否已存在
     try {
       if (await exists(fullPath)) {
-        alert(`${creating.type === "file" ? "文件" : "文件夹"}"${trimmed}"已存在`);
+        alert(`${creating.type === "file" ? t.file.fileExists : t.file.folderExists}: ${trimmed}`);
         return;
       }
     } catch {
@@ -374,7 +376,7 @@ export function Sidebar() {
       }
     } catch (error) {
       console.error("Create failed:", error);
-      alert(`创建${creating.type === "file" ? "文件" : "文件夹"}失败`);
+      alert(`${t.file.createFailed}: ${creating.type === "file" ? t.sidebar.newNote : t.sidebar.newFolder}`);
     }
 
     setCreating(null);
@@ -449,7 +451,7 @@ export function Sidebar() {
     <aside className="w-full h-full border-r border-border flex flex-col bg-muted/30 transition-colors duration-300">
       {/* Header */}
       <div className="p-3 flex items-center justify-between text-xs font-bold text-muted-foreground tracking-wider uppercase">
-        <span>资源管理器</span>
+        <span>{t.sidebar.files}</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => {
@@ -463,21 +465,21 @@ export function Sidebar() {
                 ? "bg-accent text-foreground"
                 : "text-muted-foreground hover:bg-accent"
             )}
-            title="AI 聊天（在主视图区打开）"
+            title={t.ai.chat}
           >
             <Bot className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => handleNewFile()}
             className="p-1 hover:bg-accent rounded transition-colors"
-            title="新建文件"
+            title={t.sidebar.newNote}
           >
             <FilePlus className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => handleNewFolder()}
             className="p-1 hover:bg-accent rounded transition-colors"
-            title="新建文件夹"
+            title={t.sidebar.newFolder}
           >
             <FolderPlus className="w-3.5 h-3.5" />
           </button>
@@ -485,7 +487,7 @@ export function Sidebar() {
             onClick={refreshFileTree}
             disabled={isLoadingTree}
             className="p-1 hover:bg-accent rounded transition-colors"
-            title="刷新"
+            title={t.sidebar.refresh}
           >
             <RefreshCw
               className={cn("w-3.5 h-3.5", isLoadingTree && "animate-spin")}
@@ -497,7 +499,7 @@ export function Sidebar() {
               setMoreMenu({ x: e.clientX, y: e.clientY + 20 });
             }}
             className="p-1 hover:bg-accent rounded transition-colors"
-            title="更多"
+            title={t.common.settings}
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
           </button>
@@ -510,10 +512,10 @@ export function Sidebar() {
           onClick={handleQuickNote}
           disabled={!vaultPath}
           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground bg-background hover:bg-accent border border-border rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          title="创建带时间戳的快速笔记"
+          title={t.file.quickNote}
         >
           <Calendar size={14} />
-          <span>今日速记</span>
+          <span>{t.file.quickNote}</span>
         </button>
         
         {/* 语音笔记按钮 */}
@@ -526,8 +528,8 @@ export function Sidebar() {
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                 </div>
                 <span className="text-xs font-medium">
-                  {voiceStatus === "saving" ? "保存中..." : 
-                   voiceStatus === "summarizing" ? "生成总结..." : "录音中..."}
+                  {voiceStatus === "saving" ? t.common.loading : 
+                   voiceStatus === "summarizing" ? t.common.loading : t.common.loading}
                 </span>
               </div>
               {voiceStatus === "recording" && (
@@ -535,16 +537,16 @@ export function Sidebar() {
                   <button
                     onClick={stopRecording}
                     className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                    title="停止并保存"
+                    title={t.common.save}
                   >
-                    完成
+                    {t.common.confirm}
                   </button>
                   <button
                     onClick={cancelRecording}
                     className="px-2 py-1 text-xs bg-muted text-muted-foreground rounded hover:bg-accent transition-colors"
-                    title="取消录音"
+                    title={t.common.cancel}
                   >
-                    取消
+                    {t.common.cancel}
                   </button>
                 </div>
               )}
@@ -564,10 +566,10 @@ export function Sidebar() {
             onClick={startRecording}
             disabled={!vaultPath}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground bg-background hover:bg-accent border border-border rounded-md transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            title="开始语音录制，结束后自动保存并生成总结"
+            title={t.file.voiceRecordHint}
           >
             <Mic size={14} />
-            <span>语音笔记</span>
+            <span>{t.file.voiceNote}</span>
           </button>
         )}
       </div>
@@ -592,7 +594,7 @@ export function Sidebar() {
         )}
         {fileTree.length === 0 && !creating ? (
           <div className="px-4 py-8 text-center text-muted-foreground text-sm">
-            文件夹为空
+            {t.file.emptyFolder}
           </div>
         ) : (
           fileTree.map((entry) => (
@@ -653,8 +655,8 @@ export function Sidebar() {
                   indexStatus?.initialized ? 'bg-green-500' : 'bg-gray-400'
                 }`}></div>
                 <span>
-                  {ragIsIndexing ? '索引中...' : 
-                   indexStatus?.initialized ? `索引: ${indexStatus.totalFiles} 文件` : '索引: 未初始化'}
+                  {ragIsIndexing ? t.rag.indexing : 
+                   indexStatus?.initialized ? `${t.rag.indexed}: ${indexStatus.totalFiles} ${t.rag.files}` : `${t.rag.indexed}: ${t.rag.notInitialized}`}
                 </span>
               </div>
               
@@ -664,17 +666,17 @@ export function Sidebar() {
                   <button
                     onClick={cancelIndex}
                     className="px-1.5 py-0.5 rounded text-[10px] text-red-500 hover:bg-red-500/10 transition-colors"
-                    title="取消索引"
+                    title={t.rag.cancelIndex}
                   >
-                    取消
+                    {t.rag.cancel}
                   </button>
                 ) : (
                   <button
                     onClick={() => rebuildIndex()}
                     className="px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title="重新索引"
+                    title={t.rag.rebuildIndex}
                   >
-                    重建
+                    {t.rag.rebuild}
                   </button>
                 )}
               </div>
@@ -704,7 +706,7 @@ export function Sidebar() {
         {!ragConfig.enabled && (
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-            <span>索引: 未启用</span>
+            <span>{t.rag.indexed}: {t.rag.notEnabled}</span>
           </div>
         )}
       </div>

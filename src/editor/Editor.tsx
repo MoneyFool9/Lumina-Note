@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useCallback, useRef } from "react";
 import { useFileStore } from "@/stores/useFileStore";
 import { useUIStore, EditorMode } from "@/stores/useUIStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { MainAIChatShell } from "@/components/layout/MainAIChatShell";
@@ -23,13 +24,21 @@ import { exportToPdf, getExportFileName } from "@/lib/exportPdf";
 import { TabBar } from "@/components/layout/TabBar";
 import { cn } from "@/lib/utils";
 
-const modeConfig: Record<EditorMode, { icon: React.ReactNode; label: string }> = {
-  reading: { icon: <BookOpen size={14} />, label: "阅读" },
-  live: { icon: <Eye size={14} />, label: "实时" },
-  source: { icon: <Code2 size={14} />, label: "源码" },
+const modeIcons: Record<EditorMode, React.ReactNode> = {
+  reading: <BookOpen size={14} />,
+  live: <Eye size={14} />,
+  source: <Code2 size={14} />,
 };
 
 export function Editor() {
+  const { t } = useLocaleStore();
+  
+  const modeLabels: Record<EditorMode, string> = {
+    reading: t.editor.reading,
+    live: t.editor.live,
+    source: t.editor.source,
+  };
+  
   const {
     tabs,
     activeTabIndex,
@@ -89,7 +98,7 @@ export function Editor() {
     const sessions = chatMode === "agent" ? agentSessions : chatSessions;
     const sessionId = chatMode === "agent" ? agentSessionId : chatSessionId;
     const session = sessions.find(s => s.id === sessionId);
-    return session?.title || "新对话";
+    return session?.title || t.common.newConversation;
   }, [activeTab?.type, chatMode, agentSessions, chatSessions, agentSessionId, chatSessionId]);
 
   // 滚动到指定行号
@@ -245,7 +254,7 @@ export function Editor() {
   if (isLoadingFile) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-muted-foreground">加载中...</div>
+        <div className="text-muted-foreground">{t.common.loading}</div>
       </div>
     );
   }
@@ -261,7 +270,7 @@ export function Editor() {
           <button
             onClick={toggleLeftSidebar}
             className="p-1 hover:bg-accent rounded transition-colors hover:text-foreground"
-            title="切换侧边栏"
+            title={t.sidebar.toggleSidebar}
           >
             <Sidebar size={16} />
           </button>
@@ -277,7 +286,7 @@ export function Editor() {
                   ? "hover:bg-accent text-muted-foreground hover:text-foreground"
                   : "text-muted-foreground/30 cursor-not-allowed"
               )}
-              title="返回 (Alt+←)"
+              title={t.editor.goBackShortcut}
             >
               <ChevronLeft size={16} />
             </button>
@@ -290,7 +299,7 @@ export function Editor() {
                   ? "hover:bg-accent text-muted-foreground hover:text-foreground"
                   : "text-muted-foreground/30 cursor-not-allowed"
               )}
-              title="前进 (Alt+→)"
+              title={t.editor.goForwardShortcut}
             >
               <ChevronRight size={16} />
             </button>
@@ -300,10 +309,10 @@ export function Editor() {
           <span className="text-foreground font-medium">
             {activeTab?.type === "ai-chat" 
               ? currentSessionTitle 
-              : (currentFile ? getFileName(currentFile) : "未命名")}
+              : (currentFile ? getFileName(currentFile) : t.common.untitled)}
           </span>
           {isDirty && activeTab?.type !== "ai-chat" && (
-            <span className="w-2 h-2 rounded-full bg-orange-400" title="未保存更改" />
+            <span className="w-2 h-2 rounded-full bg-orange-400" title={t.common.unsavedChanges} />
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -312,7 +321,7 @@ export function Editor() {
             <>
               {/* Mode Switcher */}
               <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
-                {(Object.keys(modeConfig) as EditorMode[]).map((mode) => (
+                {(Object.keys(modeLabels) as EditorMode[]).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => handleModeChange(mode)}
@@ -322,28 +331,28 @@ export function Editor() {
                         ? "bg-background text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                     )}
-                    title={modeConfig[mode].label}
+                    title={modeLabels[mode]}
                   >
-                    {modeConfig[mode].icon}
-                    <span className="hidden sm:inline">{modeConfig[mode].label}</span>
+                    {modeIcons[mode]}
+                    <span className="hidden sm:inline">{modeLabels[mode]}</span>
                   </button>
                 ))}
               </div>
 
               <span className="text-xs text-muted-foreground">
-                {isSaving ? "保存中..." : isDirty ? "已编辑" : "已保存"}
+                {isSaving ? t.editor.saving : isDirty ? t.editor.edited : t.common.saved}
               </span>
               <button
                 onClick={toggleSplitView}
                 className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
-                title="分屏编辑"
+                title={t.editor.splitView}
               >
                 <Columns size={16} />
               </button>
               <button
                 onClick={() => exportToPdf(currentContent, getExportFileName(currentFile))}
                 className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
-                title="导出 PDF"
+                title={t.editor.exportPdf}
               >
                 <Download size={16} />
               </button>
@@ -352,7 +361,7 @@ export function Editor() {
           <button
             onClick={toggleRightSidebar}
             className="p-1 hover:bg-accent rounded transition-colors text-muted-foreground hover:text-foreground"
-            title="切换 AI 面板"
+            title={t.sidebar.toggleAIPanel}
           >
             <MessageSquare size={16} />
           </button>
@@ -380,12 +389,12 @@ export function Editor() {
             <div className="max-w-3xl mx-auto px-6 py-4 editor-mode-container">
               {isVideoNoteFile && (
                 <div className="mb-3 flex items-center justify-between px-3 py-2 bg-blue-500/5 border border-blue-500/30 rounded-md text-xs text-blue-700 dark:text-blue-300">
-                  <span>检测到这是一个视频笔记 Markdown，可以在专用的视频笔记视图中查看和编辑。</span>
+                  <span>{t.editor.videoNoteDetected}</span>
                   <button
-                    onClick={() => openVideoNoteFromContent(currentContent, getFileName(currentFile || '视频笔记'))}
+                    onClick={() => openVideoNoteFromContent(currentContent, getFileName(currentFile || 'VideoNote'))}
                     className="ml-3 px-2 py-1 rounded bg-blue-500 text-white hover:bg-blue-600 text-xs font-medium"
                   >
-                    以视频笔记方式打开
+                    {t.editor.openAsVideoNote}
                   </button>
                 </div>
               )}

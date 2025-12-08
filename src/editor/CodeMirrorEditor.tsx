@@ -4,6 +4,7 @@ import { useFileStore } from "@/stores/useFileStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useSplitStore } from "@/stores/useSplitStore";
 import { useUIStore } from "@/stores/useUIStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { parseLuminaLink } from "@/lib/annotations";
 import { writeBinaryFile, readBinaryFileBase64 } from "@/lib/tauri";
 import { EditorState, StateField, StateEffect, Compartment, Facet } from "@codemirror/state";
@@ -284,7 +285,7 @@ class MermaidWidget extends WidgetType {
         });
         await mermaid.run({ nodes: [pre] });
       } catch (err) {
-        console.error('[Mermaid] 渲染失败:', err);
+        console.error('[Mermaid] Render failed:', err);
         pre.textContent = `Mermaid Error: ${this.code}`;
         pre.style.color = 'red';
       }
@@ -348,7 +349,7 @@ class ImageWidget extends WidgetType {
       
       // 先显示加载中状态
       img.style.opacity = "0.5";
-      img.alt = "加载中...";
+      img.alt = useLocaleStore.getState().t.common.loading;
       
       // 异步加载 base64
       const ext = fullPath.split('.').pop()?.toLowerCase() || 'png';
@@ -363,8 +364,8 @@ class ImageWidget extends WidgetType {
           img.alt = this.alt;
         })
         .catch(err => {
-          console.error('[ImageWidget] 图片加载失败:', fullPath, err);
-          img.alt = `图片加载失败: ${this.src}`;
+          console.error('[ImageWidget] Image load failed:', fullPath, err);
+          img.alt = `${useLocaleStore.getState().t.editor.imageLoadFailed}: ${this.src}`;
           img.style.opacity = "1";
         });
     }

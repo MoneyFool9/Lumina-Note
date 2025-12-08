@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { getAgentLoop } from "@/agent/core/AgentLoop";
 import { useRAGStore } from "@/stores/useRAGStore";
 import { useFileStore } from "@/stores/useFileStore";
@@ -43,13 +44,15 @@ const WELCOME_EMOJIS = [
   "🧐", "🤓", "😎",
 ];
 
-// 快捷操作卡片数据
-const QUICK_ACTIONS = [
-  { icon: Sparkles, label: "润色文字", desc: "Chat: 优化表达", mode: "chat" as const, prompt: "帮我润色这段文字：" },
-  { icon: FileText, label: "总结笔记", desc: "Chat: 提炼要点", mode: "chat" as const, prompt: "帮我总结当前笔记的要点" },
-  { icon: Zap, label: "写篇文章", desc: "Agent: 创建新笔记", mode: "agent" as const, prompt: "帮我写一篇关于" },
-  { icon: Bot, label: "学习笔记", desc: "Agent: 整理知识点", mode: "agent" as const, prompt: "帮我创建一份关于 __ 的学习笔记" },
-];
+// 快捷操作卡片数据 - 动态获取翻译
+function getQuickActions(t: ReturnType<typeof useLocaleStore.getState>['t']) {
+  return [
+    { icon: Sparkles, label: t.ai.polishText, desc: t.ai.polishTextDesc, mode: "chat" as const, prompt: "帮我润色这段文字：" },
+    { icon: FileText, label: t.ai.summarizeNote, desc: t.ai.summarizeNoteDesc, mode: "chat" as const, prompt: "帮我总结当前笔记的要点" },
+    { icon: Zap, label: t.ai.writeArticle, desc: t.ai.writeArticleDesc, mode: "agent" as const, prompt: "帮我写一篇关于" },
+    { icon: Bot, label: t.ai.studyNotes, desc: t.ai.studyNotesDesc, mode: "agent" as const, prompt: "帮我创建一份关于 __ 的学习笔记" },
+  ];
+}
 
 // 建议卡片组件
 function SuggestionCard({
@@ -81,6 +84,7 @@ function SuggestionCard({
 
 
 export function MainAIChatShell() {
+  const { t } = useLocaleStore();
   const { chatMode, setChatMode } = useUIStore();
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -306,8 +310,11 @@ export function MainAIChatShell() {
     }
   }, [chatMode, agentAbort, stopStreaming]);
 
+  // 获取快捷操作列表
+  const quickActions = useMemo(() => getQuickActions(t), [t]);
+
   // 快捷操作点击
-  const handleQuickAction = (action: typeof QUICK_ACTIONS[0]) => {
+  const handleQuickAction = (action: typeof quickActions[0]) => {
     setChatMode(action.mode);
     if (action.prompt) {
       setInput(action.prompt);
@@ -446,7 +453,7 @@ export function MainAIChatShell() {
                             deleteSession(session.id);
                           }}
                           className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all"
-                          title="删除对话"
+                          title={t.common.delete}
                         >
                           <Trash2 size={12} />
                         </button>
@@ -478,8 +485,11 @@ export function MainAIChatShell() {
                 </div>
 
                 <h1 className="text-3xl font-bold text-foreground tracking-tight">
-                  随时待命，我能帮上什么忙吗？
+                  {t.ai.welcomeTitle}
                 </h1>
+                <p className="text-muted-foreground text-sm">
+                  {t.ai.welcomeSubtitle}
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -890,10 +900,10 @@ export function MainAIChatShell() {
                 exit={{ opacity: 0, y: 50, pointerEvents: "none", transition: { duration: 0.2 } }}
               >
                 <div className="mb-4 px-1">
-                  <span className="text-xs font-medium text-muted-foreground">立即开始</span>
+                  <span className="text-xs font-medium text-muted-foreground">{t.ai.startTask}</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {QUICK_ACTIONS.map((action, idx) => (
+                  {quickActions.map((action, idx) => (
                     <SuggestionCard
                       key={idx}
                       icon={action.icon}

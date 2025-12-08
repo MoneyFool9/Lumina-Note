@@ -3,6 +3,7 @@ import { parseMarkdown } from "@/lib/markdown";
 import { useFileStore } from "@/stores/useFileStore";
 import { useSplitStore } from "@/stores/useSplitStore";
 import { useUIStore } from "@/stores/useUIStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { parseLuminaLink } from "@/lib/annotations";
 import { readBinaryFileBase64 } from "@/lib/tauri";
 import mermaid from "mermaid";
@@ -53,7 +54,7 @@ export function ReadingView({ content, className = "" }: ReadingViewProps) {
           nodes: mermaidElements as NodeListOf<HTMLElement>,
         });
       } catch (err) {
-        console.error('[Mermaid] 渲染失败:', err);
+        console.error('[Mermaid] Render failed:', err);
       }
     };
     
@@ -88,8 +89,8 @@ export function ReadingView({ content, className = "" }: ReadingViewProps) {
             img.style.opacity = '1';
           })
           .catch(err => {
-            console.error('[ReadingView] 图片加载失败:', fullPath, err);
-            img.alt = `图片加载失败: ${src}`;
+            console.error('[ReadingView] Image load failed:', fullPath, err);
+            img.alt = `${useLocaleStore.getState().t.editor.imageLoadFailed}: ${src}`;
             img.style.opacity = '1';
           });
       }
@@ -147,7 +148,7 @@ export function ReadingView({ content, className = "" }: ReadingViewProps) {
         if (filePath) {
           openFile(filePath);
         } else {
-          console.log(`笔记不存在: ${linkName}`);
+          console.log(`Note not found: ${linkName}`);
         }
       }
     }

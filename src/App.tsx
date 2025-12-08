@@ -11,7 +11,9 @@ import { useFileStore } from "@/stores/useFileStore";
 import { useUIStore } from "@/stores/useUIStore";
 import { useNoteIndexStore } from "@/stores/useNoteIndexStore";
 import { useRAGStore } from "@/stores/useRAGStore";
-import { FolderOpen, Sparkles, PanelLeftClose, PanelRightClose, PanelLeft, PanelRight } from "lucide-react";
+import { FolderOpen, Sparkles, PanelLeftClose, PanelRightClose, PanelLeft, PanelRight, Globe, ChevronDown } from "lucide-react";
+import { useLocaleStore } from "@/stores/useLocaleStore";
+import { SUPPORTED_LOCALES, Locale } from "@/i18n";
 import { CommandPalette, PaletteMode } from "@/components/search/CommandPalette";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { TabBar } from "@/components/layout/TabBar";
@@ -405,38 +407,75 @@ function App() {
   );
 
   // Welcome screen when no vault is open
+  const { locale, setLocale, t } = useLocaleStore();
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  
   if (!vaultPath) {
     return (
       <div className="h-full flex flex-col bg-background">
         <TitleBar />
-        <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-8">
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg">
-              <Sparkles className="w-6 h-6 text-white" />
+        <div className="flex-1 flex items-center justify-center relative">
+          {/* Language Selector - Top Right */}
+          <div className="absolute top-4 right-4">
+            <div className="relative">
+              <button
+                onClick={() => setLangMenuOpen(!langMenuOpen)}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-background hover:bg-accent transition-colors text-sm"
+              >
+                <Globe className="w-4 h-4" />
+                <span>{SUPPORTED_LOCALES.find(l => l.code === locale)?.nativeName}</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${langMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {langMenuOpen && (
+                <div className="absolute right-0 mt-1 w-40 rounded-lg border border-border bg-background shadow-lg py-1 z-50">
+                  {SUPPORTED_LOCALES.map((loc) => (
+                    <button
+                      key={loc.code}
+                      onClick={() => {
+                        setLocale(loc.code as Locale);
+                        setLangMenuOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors flex items-center justify-between ${
+                        locale === loc.code ? 'text-primary font-medium' : ''
+                      }`}
+                    >
+                      <span>{loc.nativeName}</span>
+                      {locale === loc.code && <span className="text-primary">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-              Lumina Note
-            </h1>
           </div>
+          
+          <div className="text-center space-y-8">
+            {/* Logo */}
+            <div className="flex items-center justify-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
+              <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                {t.welcome.title}
+              </h1>
+            </div>
 
-          <p className="text-muted-foreground text-lg">
-            本地优先的 AI 驱动笔记应用
-          </p>
+            <p className="text-muted-foreground text-lg">
+              {t.welcome.subtitle}
+            </p>
 
-          <button
-            onClick={handleOpenVault}
-            className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-medium shadow-lg hover:shadow-xl hover:scale-105"
-          >
-            <FolderOpen className="w-5 h-5" />
-            打开笔记文件夹
-          </button>
+            <button
+              onClick={handleOpenVault}
+              className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all font-medium shadow-lg hover:shadow-xl hover:scale-105"
+            >
+              <FolderOpen className="w-5 h-5" />
+              {t.welcome.openFolder}
+            </button>
 
-          <p className="text-sm text-muted-foreground">
-            选择一个包含 Markdown 笔记的文件夹
-          </p>
-        </div>
+            <p className="text-sm text-muted-foreground">
+              {t.welcome.selectFolder}
+            </p>
+          </div>
         </div>
       </div>
     );

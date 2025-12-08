@@ -5,6 +5,7 @@ import { useAgentStore } from "@/stores/useAgentStore";
 import { useFileStore } from "@/stores/useFileStore";
 import { useNoteIndexStore } from "@/stores/useNoteIndexStore";
 import { useRAGStore } from "@/stores/useRAGStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { getFileName } from "@/lib/utils";
 import { PROVIDER_REGISTRY, type LLMProviderType } from "@/services/llm";
 import {
@@ -53,6 +54,7 @@ function parseHeadings(content: string): HeadingItem[] {
 
 // Backlinks view component
 function BacklinksView() {
+  const { t } = useLocaleStore();
   const { currentFile, openFile } = useFileStore();
   const { getBacklinks, isIndexing } = useNoteIndexStore();
   
@@ -70,7 +72,7 @@ function BacklinksView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <Link2 size={32} className="opacity-30 mb-2" />
-        <p>打开笔记后显示反向链接</p>
+        <p>{t.panel.openNoteToShowBacklinks}</p>
       </div>
     );
   }
@@ -79,7 +81,7 @@ function BacklinksView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <Loader2 size={24} className="animate-spin mb-2" />
-        <p>正在建立索引...</p>
+        <p>{t.panel.buildingIndex}</p>
       </div>
     );
   }
@@ -88,8 +90,8 @@ function BacklinksView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <Link2 size={32} className="opacity-30 mb-2" />
-        <p>暂无反向链接</p>
-        <p className="text-xs opacity-70 mt-1">其他笔记中使用 [[{currentFileName}]] 链接到此笔记</p>
+        <p>{t.panel.noBacklinks}</p>
+        <p className="text-xs opacity-70 mt-1">{t.panel.backlinkHint.replace('{name}', currentFileName)}</p>
       </div>
     );
   }
@@ -100,7 +102,7 @@ function BacklinksView() {
       <div className="p-2 border-b border-border flex items-center gap-2">
         <Link2 size={12} className="text-muted-foreground" />
         <span className="text-xs text-muted-foreground">
-          {backlinks.length} 个反向链接
+          {backlinks.length} {t.panel.backlinks}
         </span>
       </div>
       
@@ -133,6 +135,7 @@ function BacklinksView() {
 
 // Tags view component
 function TagsView() {
+  const { t } = useLocaleStore();
   const { allTags, isIndexing } = useNoteIndexStore();
   const { openFile } = useFileStore();
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
@@ -153,7 +156,7 @@ function TagsView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <Loader2 size={24} className="animate-spin mb-2" />
-        <p>正在建立索引...</p>
+        <p>{t.panel.buildingIndex}</p>
       </div>
     );
   }
@@ -162,8 +165,8 @@ function TagsView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <Tag size={32} className="opacity-30 mb-2" />
-        <p>暂无标签</p>
-        <p className="text-xs opacity-70 mt-1">使用 #标签名 创建标签</p>
+        <p>{t.panel.noTags}</p>
+        <p className="text-xs opacity-70 mt-1">{t.panel.tagHint}</p>
       </div>
     );
   }
@@ -174,7 +177,7 @@ function TagsView() {
       <div className="p-2 border-b border-border flex items-center gap-2">
         <Tag size={12} className="text-muted-foreground" />
         <span className="text-xs text-muted-foreground">
-          {allTags.length} 个标签
+          {allTags.length} {t.panel.tags}
         </span>
       </div>
       
@@ -221,6 +224,7 @@ function TagsView() {
 
 // Outline view component
 function OutlineView() {
+  const { t } = useLocaleStore();
   const { currentContent, currentFile } = useFileStore();
   const [expandedLevels, setExpandedLevels] = useState<Set<number>>(new Set([1, 2, 3]));
   
@@ -250,7 +254,7 @@ function OutlineView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <List size={32} className="opacity-30 mb-2" />
-        <p>打开笔记后显示大纲</p>
+        <p>{t.panel.openNoteToShowOutline}</p>
       </div>
     );
   }
@@ -259,8 +263,8 @@ function OutlineView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4">
         <Hash size={32} className="opacity-30 mb-2" />
-        <p>此笔记没有标题</p>
-        <p className="text-xs opacity-70 mt-1">使用 # 创建标题</p>
+        <p>{t.panel.noHeadings}</p>
+        <p className="text-xs opacity-70 mt-1">{t.panel.headingHint}</p>
       </div>
     );
   }
@@ -274,7 +278,7 @@ function OutlineView() {
       <div className="p-2 border-b border-border flex items-center justify-between">
         <span className="text-xs text-muted-foreground flex items-center gap-1">
           <List size={12} />
-          {headings.length} 个标题
+          {headings.length} {t.panel.headings}
         </span>
         <div className="flex gap-0.5">
           {[1, 2, 3, 4, 5, 6].map(level => {
@@ -289,7 +293,7 @@ function OutlineView() {
                     ? "bg-primary/20 text-primary"
                     : "bg-muted text-muted-foreground hover:bg-accent"
                 }`}
-                title={`切换 H${level}`}
+                title={`${t.panel.toggleLevel}${level}`}
               >
                 {level}
               </button>
@@ -325,6 +329,7 @@ function OutlineView() {
 }
 
 export function RightPanel() {
+  const { t } = useLocaleStore();
   const { 
     rightPanelTab, 
     setRightPanelTab,
@@ -440,7 +445,7 @@ export function RightPanel() {
                 ? "text-primary border-b-2 border-primary"
                 : "text-muted-foreground hover:text-foreground"
             } ${isDraggingAI ? "cursor-grabbing" : "cursor-grab"}`}
-            title="AI 助手 (可拖出为悬浮球)"
+            title={t.ai.chat}
           >
             {chatMode === "agent" ? <Bot size={12} /> : <BrainCircuit size={12} />}
             <span className="hidden sm:inline">AI</span>
@@ -453,10 +458,10 @@ export function RightPanel() {
               ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          title="大纲视图"
+          title={t.graph.outline}
         >
           <List size={12} />
-          <span className="hidden sm:inline">大纲</span>
+          <span className="hidden sm:inline">{t.graph.outline}</span>
         </button>
         <button
           onClick={() => setRightPanelTab("backlinks")}
@@ -465,10 +470,10 @@ export function RightPanel() {
               ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          title="反向链接"
+          title={t.graph.backlinks}
         >
           <Link2 size={12} />
-          <span className="hidden sm:inline">链接</span>
+          <span className="hidden sm:inline">{t.graph.backlinks}</span>
         </button>
         <button
           onClick={() => setRightPanelTab("tags")}
@@ -477,10 +482,10 @@ export function RightPanel() {
               ? "text-primary border-b-2 border-primary"
               : "text-muted-foreground hover:text-foreground"
           }`}
-          title="标签"
+          title={t.graph.tags}
         >
           <Tag size={12} />
-          <span className="hidden sm:inline">标签</span>
+          <span className="hidden sm:inline">{t.graph.tags}</span>
         </button>
       </div>
 
@@ -504,7 +509,7 @@ export function RightPanel() {
                       ? "bg-background text-primary shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
-                  title="Agent 模式 - 智能任务执行"
+                  title={t.ai.agentMode}
                 >
                   <Bot size={12} />
                   Agent
@@ -516,28 +521,28 @@ export function RightPanel() {
                       ? "bg-background text-primary shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
-                  title="对话模式 - 简单问答"
+                  title={t.ai.chatMode}
                 >
                   <BrainCircuit size={12} />
-                  对话
+                  {t.ai.conversation}
                 </button>
               </div>
               <span className="text-xs text-muted-foreground">
-                {config.apiKey ? "✓" : "未配置"}
+                {config.apiKey ? "✓" : t.settingsModal.notConfigured}
               </span>
             </div>
             <div className="flex gap-1">
               <button
                 onClick={clearChat}
                 className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-                title="清空对话"
+                title={t.panel.clearChat}
               >
                 <Trash2 size={14} />
               </button>
               <button
                 onClick={() => setShowSettings(!showSettings)}
                 className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-                title="设置"
+                title={t.common.settings}
               >
                 <Settings size={14} />
               </button>
@@ -549,19 +554,19 @@ export function RightPanel() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* 返回按钮 */}
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium">⚙️ 设置</h3>
+                <h3 className="text-sm font-medium">⚙️ {t.settingsPanel.title}</h3>
                 <button
                   onClick={() => setShowSettings(false)}
                   className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors"
                 >
-                  ← 返回
+                  {t.panel.back}
                 </button>
               </div>
               {/* AI Provider Settings */}
               <div className="space-y-2">
-                <div className="text-xs font-medium text-foreground">🤖 AI 对话设置</div>
+                <div className="text-xs font-medium text-foreground">🤖 {t.settingsPanel.aiChatSettings}</div>
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">服务商</label>
+                  <label className="text-xs text-muted-foreground block mb-1">{t.settingsPanel.provider}</label>
                   <select
                     value={config.provider}
                     onChange={(e) => {
@@ -581,7 +586,7 @@ export function RightPanel() {
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">
-                    API Key {config.provider === "ollama" && <span className="text-muted-foreground">(可选)</span>}
+                    API Key {config.provider === "ollama" && <span className="text-muted-foreground">({t.settingsPanel.apiKeyOptional})</span>}
                   </label>
                   <input
                     type="password"
@@ -589,7 +594,7 @@ export function RightPanel() {
                     onChange={(e) => setConfig({ apiKey: e.target.value })}
                     placeholder={
                       config.provider === "ollama" 
-                        ? "本地模型无需 API Key" 
+                        ? t.settingsPanel.localModelNoKey 
                         : config.provider === "anthropic" 
                           ? "sk-ant-..." 
                           : "sk-..."
@@ -598,7 +603,7 @@ export function RightPanel() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">模型</label>
+                  <label className="text-xs text-muted-foreground block mb-1">{t.settingsPanel.model}</label>
                   <select
                     value={PROVIDER_REGISTRY[config.provider as LLMProviderType]?.models.some(m => m.id === config.model) ? config.model : "custom"}
                     onChange={(e) => {
@@ -623,7 +628,7 @@ export function RightPanel() {
                 {config.model === "custom" && (
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">
-                      自定义模型 ID
+                      {t.settingsPanel.customModelId}
                     </label>
                     <input
                       type="text"
@@ -633,14 +638,14 @@ export function RightPanel() {
                       className="w-full text-xs p-2 rounded border border-border bg-background"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      💡 输入完整的模型 ID（包含命名空间，如有）
+                      💡 {t.settingsPanel.customModelHint}
                     </p>
                   </div>
                 )}
                 {/* 自定义 Base URL (所有 Provider 都支持) */}
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">
-                    Base URL <span className="text-muted-foreground">(可选，用于第三方代理)</span>
+                    Base URL <span className="text-muted-foreground">({t.settingsPanel.baseUrlHint})</span>
                   </label>
                   <input
                     type="text"
@@ -655,7 +660,7 @@ export function RightPanel() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-muted-foreground">
-                      温度 (Temperature)
+                      {t.settingsPanel.temperature}
                     </label>
                     <span className="text-xs text-muted-foreground">
                       {config.temperature ?? 0.3}
@@ -671,14 +676,14 @@ export function RightPanel() {
                     className="w-full accent-primary h-1 bg-muted rounded-lg appearance-none cursor-pointer"
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    较高的值会使输出更随机，较低的值会更集中和确定。
+                    {t.settingsPanel.temperatureHint}
                   </p>
                 </div>
               </div>
 
               {/* Agent Settings */}
               <div className="space-y-2 pt-3 border-t border-border">
-                <div className="text-xs font-medium text-foreground">🤖 Agent 设置</div>
+                <div className="text-xs font-medium text-foreground">🤖 {t.settingsPanel.agentSettings}</div>
                 <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
                   <input
                     type="checkbox"
@@ -686,15 +691,15 @@ export function RightPanel() {
                     onChange={(e) => setAutoApprove(e.target.checked)}
                     className="w-3 h-3 rounded border-border"
                   />
-                  自动批准工具调用
-                  <span className="text-muted-foreground">(无需手动确认)</span>
+                  {t.settingsPanel.autoApproveTools}
+                  <span className="text-muted-foreground">({t.settingsPanel.noManualConfirm})</span>
                 </label>
               </div>
 
               {/* RAG Settings */}
               <div className="space-y-2 pt-3 border-t border-border">
                 <div className="text-xs font-medium text-foreground flex items-center justify-between">
-                  <span>🔍 语义搜索 (RAG)</span>
+                  <span>🔍 {t.settingsPanel.semanticSearch}</span>
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
                       type="checkbox"
@@ -702,7 +707,7 @@ export function RightPanel() {
                       onChange={(e) => setRAGConfig({ enabled: e.target.checked })}
                       className="w-3 h-3"
                     />
-                    <span className="text-xs text-muted-foreground">启用</span>
+                    <span className="text-xs text-muted-foreground">{t.settingsPanel.enable}</span>
                   </label>
                 </div>
                 
@@ -712,14 +717,14 @@ export function RightPanel() {
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-muted-foreground">
                         {ragIsIndexing
-                          ? `正在索引${
+                          ? `${t.rag.indexing} ${
                               typeof indexStatus?.progress === "number"
-                                ? `：${Math.round(indexStatus.progress * 100)}%`
-                                : "..."
+                                ? `${Math.round(indexStatus.progress * 100)}%`
+                                : ""
                             }`
                           : indexStatus
-                            ? `已索引 ${indexStatus.totalChunks ?? 0} 个片段`
-                            : "尚未建立索引"}
+                            ? `${t.rag.indexed}: ${indexStatus.totalChunks ?? 0} ${t.rag.chunks}`
+                            : t.rag.notBuilt}
                       </span>
                       <div className="flex gap-2">
                         <button
@@ -728,7 +733,7 @@ export function RightPanel() {
                           disabled={ragIsIndexing}
                           className="px-2 py-1 rounded border border-border text-xs hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          重新索引
+                          {t.rag.rebuildIndex}
                         </button>
                         {ragIsIndexing && (
                           <button
@@ -736,14 +741,14 @@ export function RightPanel() {
                             onClick={cancelIndex}
                             className="px-2 py-1 rounded border border-red-500/60 text-xs text-red-500 hover:bg-red-500/10"
                           >
-                            取消索引
+                            {t.rag.cancelIndex}
                           </button>
                         )}
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Embedding 服务</label>
+                      <label className="text-xs text-muted-foreground block mb-1">{t.settingsPanel.embeddingService}</label>
                       <select
                         value={ragConfig.embeddingProvider}
                         onChange={(e) => {
@@ -760,7 +765,7 @@ export function RightPanel() {
                         className="w-full text-xs p-2 rounded border border-border bg-background"
                       >
                         <option value="openai">OpenAI</option>
-                        <option value="ollama">Ollama (本地)</option>
+                        <option value="ollama">Ollama (Local)</option>
                       </select>
                     </div>
                     
@@ -768,7 +773,7 @@ export function RightPanel() {
                       <label className="text-xs text-muted-foreground block mb-1">
                         Embedding API Key
                         {ragConfig.embeddingProvider === "ollama" && (
-                          <span className="text-muted-foreground/60 ml-1">(可选)</span>
+                          <span className="text-muted-foreground/60 ml-1">({t.settingsPanel.apiKeyOptional})</span>
                         )}
                       </label>
                       <input
@@ -781,7 +786,7 @@ export function RightPanel() {
                     </div>
 
                     <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Embedding Base URL</label>
+                      <label className="text-xs text-muted-foreground block mb-1">{t.settingsPanel.embeddingBaseUrl}</label>
                       <input
                         type="text"
                         value={ragConfig.embeddingBaseUrl || ""}
@@ -792,7 +797,7 @@ export function RightPanel() {
                     </div>
 
                     <div>
-                      <label className="text-xs text-muted-foreground block mb-1">Embedding 模型</label>
+                      <label className="text-xs text-muted-foreground block mb-1">{t.settingsPanel.embeddingModel}</label>
                       <input
                         type="text"
                         value={ragConfig.embeddingModel}
@@ -805,7 +810,7 @@ export function RightPanel() {
                     <div>
                       <label className="text-xs text-muted-foreground block mb-1">
                         向量维度
-                        <span className="text-muted-foreground/60 ml-1">(可选)</span>
+                        <span className="text-muted-foreground/60 ml-1">({t.settingsPanel.apiKeyOptional})</span>
                       </label>
                       <input
                         type="number"
@@ -827,7 +832,7 @@ export function RightPanel() {
                             onChange={(e) => setRAGConfig({ rerankerEnabled: e.target.checked })}
                             className="w-3 h-3"
                           />
-                          <span className="text-xs text-muted-foreground">启用</span>
+                          <span className="text-xs text-muted-foreground">{t.settingsPanel.enable}</span>
                         </label>
                       </div>
                       

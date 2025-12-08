@@ -6,6 +6,7 @@
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useFileStore } from "@/stores/useFileStore";
 import { useAIStore } from "@/stores/useAIStore";
+import { useLocaleStore } from "@/stores/useLocaleStore";
 import { Send, FileText, Folder, X, Loader2, Paperclip, Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,12 +42,14 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
   isLoading = false,
   isStreaming = false,
   onStop,
-  placeholder = "输入消息... (@ 引用文件)",
+  placeholder,
   className,
   rows = 2,
   hideSendButton = false,
 }, ref) => {
+  const { t } = useLocaleStore();
   const { fileTree } = useFileStore();
+  const defaultPlaceholder = placeholder || t.ai.inputPlaceholder;
   const { textSelections, removeTextSelection, clearTextSelections } = useAIStore();
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -266,7 +269,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={defaultPlaceholder}
           rows={rows}
           className="flex-1 resize-none bg-transparent outline-none text-sm"
         />
@@ -276,7 +279,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
           <button
             onClick={() => setShowFilePicker(!showFilePicker)}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
-            title="附加文件 (或输入 @ 引用)"
+            title={t.ai.attachFile}
           >
             <Paperclip size={16} />
           </button>
@@ -289,7 +292,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
                   type="text"
                   value={filePickerQuery}
                   onChange={(e) => setFilePickerQuery(e.target.value)}
-                  placeholder="搜索文件..."
+                  placeholder={t.ai.searchFiles}
                   className="w-full px-2 py-1.5 text-sm bg-muted/50 border border-border rounded outline-none focus:ring-1 focus:ring-primary/50"
                   autoFocus
                 />
@@ -297,7 +300,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
               <div className="max-h-60 overflow-y-auto">
                 {pickerFilteredFiles.length === 0 ? (
                   <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                    未找到匹配的文件
+                    {t.ai.noFilesFound}
                   </div>
                 ) : (
                   pickerFilteredFiles.map((file) => (
@@ -323,7 +326,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
                 )}
               </div>
               <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
-                共 {allFiles.length} 个文件
+                {t.ai.totalFiles.replace('{count}', String(allFiles.length))}
               </div>
             </div>
           )}
@@ -334,7 +337,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
             <button
               onClick={onStop}
               className="self-end bg-red-500 hover:bg-red-600 text-white rounded-lg p-2 transition-colors"
-              title="停止生成"
+              title={t.ai.stopGenerate}
             >
               <span className="block w-4 h-4 bg-white rounded-sm" />
             </button>
@@ -358,7 +361,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
         >
           {filteredFiles.length === 0 ? (
             <div className="px-3 py-2 text-sm text-muted-foreground">
-              未找到匹配的文件
+              {t.ai.noFilesFound}
             </div>
           ) : (
             filteredFiles.map((file, index) => (
