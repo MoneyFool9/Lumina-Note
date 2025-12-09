@@ -381,7 +381,7 @@ export default {
       cyberpunk: { name: 'Cyberpunk', description: 'Neon colors: purple-black + hot pink + cyan' },
       dracula: { name: 'Dracula', description: 'Classic: cool gray + purple + green + orange' },
       solarized: { name: 'Solarized', description: 'Eye-friendly: warm beige + blue/orange/red/green' },
-      retro: { name: 'Retro', description: 'Nostalgic: earth tones + red/green/blue/yellow accents' },
+      gruvbox: { name: 'Retro', description: 'Nostalgic: earth tones + red/green/blue/yellow accents' },
     },
     editor: 'Editor',
     defaultEditMode: 'Default Edit Mode',

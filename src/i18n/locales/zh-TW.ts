@@ -279,7 +279,7 @@ export default {
       cyberpunk: { name: '賽博龐克', description: '霓虹撞色：紫黑背景 + 螢光粉 + 青色高亮' },
       dracula: { name: '吸血鬼', description: '經典配色：冷灰背景 + 紫色 + 綠色 + 橙色混搭' },
       solarized: { name: '日蝕', description: '護眼高對比：暖米色背景 + 藍/橙/紅/綠 組合' },
-      retro: { name: '復古', description: '暖調懷舊：大地色背景 + 紅綠藍黃撞色' },
+      gruvbox: { name: '復古', description: '暖調懷舊：大地色背景 + 紅綠藍黃撞色' },
     },
     editor: '編輯器',
     defaultEditMode: '預設編輯模式',

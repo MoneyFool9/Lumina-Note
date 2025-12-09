@@ -279,7 +279,7 @@ export default {
       cyberpunk: { name: 'サイバーパンク', description: 'ネオンカラー：紫黒 + ホットピンク + シアン' },
       dracula: { name: 'ドラキュラ', description: 'クラシック：クールグレー + 紫 + 緑 + オレンジ' },
       solarized: { name: 'ソラライズド', description: '目に優しい：暖かいベージュ + 青/橙/赤/緑' },
-      retro: { name: 'レトロ', description: 'ノスタルジック：アースカラー + 赤緑青黄アクセント' },
+      gruvbox: { name: 'レトロ', description: 'ノスタルジック：アースカラー + 赤緑青黄アクセント' },
     },
     editor: 'エディター',
     defaultEditMode: 'デフォルト編集モード',
