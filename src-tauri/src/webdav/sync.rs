@@ -219,8 +219,9 @@ impl SyncEngine {
                 (SyncAction::Upload, "New local file".to_string())
             }
             (Some(_), None, Some(_)) => {
-                // 之前同步过，远程没了 -> 远程被删除
-                (SyncAction::DeleteLocal, "Remote file was deleted".to_string())
+                // 之前同步过，远程没了 -> 本地优先：重新上传
+                // 不删除本地文件，保护用户数据
+                (SyncAction::Upload, "Remote file missing, re-uploading (local-first)".to_string())
             }
 
             // 本地存在，远程也存在
@@ -292,7 +293,9 @@ impl SyncEngine {
                     self.execute_delete_remote(item).await
                 }
                 SyncAction::DeleteLocal => {
-                    self.execute_delete_local(item).await
+                    // 本地优先：永远不删除本地文件，跳过此操作
+                    log::warn!("Skipping DeleteLocal for {} - local-first policy", item.path);
+                    continue;
                 }
                 SyncAction::Conflict => {
                     self.handle_conflict(item).await
@@ -323,15 +326,33 @@ impl SyncEngine {
             }
         }
 
-        // 更新同步状态
+        // 更新同步状态 - 合并记录而非替换
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
+        // 保留之前的记录，只更新/添加本次处理的文件
+        let mut merged_records: HashMap<String, FileRecord> = self.state
+            .as_ref()
+            .map(|s| s.file_records.iter().map(|r| (r.path.clone(), r.clone())).collect())
+            .unwrap_or_default();
+
+        // 更新/添加新记录
+        for record in new_records {
+            merged_records.insert(record.path.clone(), record);
+        }
+
+        // 移除已删除的文件记录（仅远程删除，本地删除不再传播）
+        for item in &plan.items {
+            if item.action == SyncAction::DeleteRemote {
+                merged_records.remove(&item.path);
+            }
+        }
+
         self.state = Some(SyncState {
             last_sync: now,
-            file_records: new_records,
+            file_records: merged_records.into_values().collect(),
         });
         self.save_state()?;
 
@@ -424,14 +445,12 @@ impl SyncEngine {
         Ok(None) // 删除后不再跟踪
     }
 
-    /// 删除本地文件
-    async fn execute_delete_local(&self, item: &SyncPlanItem) -> Result<Option<FileRecord>, AppError> {
-        let local_path = format!("{}/{}", self.vault_path, item.path);
-        if Path::new(&local_path).exists() {
-            // 移到回收站
-            trash::delete(&local_path)
-                .map_err(|e| AppError::WebDAV(format!("Failed to delete local file: {}", e)))?;
-        }
+    /// 删除本地文件 - 本地优先策略下禁用
+    #[allow(dead_code)]
+    async fn execute_delete_local(&self, _item: &SyncPlanItem) -> Result<Option<FileRecord>, AppError> {
+        // 本地优先：永远不删除本地文件
+        // 如果用户想删除，应该手动删除
+        log::warn!("execute_delete_local called but disabled - local-first policy");
         Ok(None)
     }
 
