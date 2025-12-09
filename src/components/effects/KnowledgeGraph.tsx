@@ -105,6 +105,12 @@ const PhysicsEngine = {
     const cx = width / 2;
     const cy = height / 2;
 
+    // 构建节点索引 Map（O(1) 查找）
+    const nodeMap = new Map<string, GraphNode>();
+    for (const node of nodes) {
+      nodeMap.set(node.id, node);
+    }
+
     // Repulsion
     for (let i = 0; i < nodes.length; i++) {
       const u = nodes[i];
@@ -127,10 +133,10 @@ const PhysicsEngine = {
       }
     }
 
-    // Spring forces (edges)
+    // Spring forces (edges) - 使用 Map O(1) 查找
     edges.forEach((e) => {
-      const u = nodes.find((n) => n.id === e.source);
-      const v = nodes.find((n) => n.id === e.target);
+      const u = nodeMap.get(e.source);
+      const v = nodeMap.get(e.target);
       if (!u || !v) return;
 
       const dx = v.x - u.x;
