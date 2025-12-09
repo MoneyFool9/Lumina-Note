@@ -252,18 +252,25 @@ export function KnowledgeGraph({ className = "", isolatedNode }: KnowledgeGraphP
   const [showSettings, setShowSettings] = useState(false);
   const [nodeSize, setNodeSize] = useState(1.0);
   const [showLabels, setShowLabels] = useState(true);
+  const [showFolders, setShowFolders] = useState(true); // 是否显示文件夹节点
 
-  // 应用图数据（支持孤立视图过滤）- 必须在 buildGraph 之前定义
-  const applyGraphData = useCallback((nodes: GraphNode[], edges: GraphEdge[]) => {
+  // 应用图数据（支持孤立视图过滤和文件夹过滤）- 必须在 buildGraph 之前定义
+  const applyGraphData = useCallback((nodes: GraphNode[], edges: GraphEdge[], includeFolders: boolean) => {
     let displayNodes = nodes;
     let displayEdges = edges;
+
+    // 如果不显示文件夹，过滤掉文件夹节点和层级边
+    if (!includeFolders) {
+      displayNodes = nodes.filter(n => !n.isFolder);
+      displayEdges = edges.filter(e => e.type === 'link'); // 只保留双链边
+    }
     
     if (isolatedNode) {
       // 找到目标节点的所有直接相连节点
       const connectedIds = new Set<string>();
       connectedIds.add(isolatedNode.id);
       
-      for (const edge of edges) {
+      for (const edge of displayEdges) {
         if (edge.source === isolatedNode.id) {
           connectedIds.add(edge.target);
         }
@@ -272,8 +279,8 @@ export function KnowledgeGraph({ className = "", isolatedNode }: KnowledgeGraphP
         }
       }
       
-      displayNodes = nodes.filter(n => connectedIds.has(n.id));
-      displayEdges = edges.filter(e => 
+      displayNodes = displayNodes.filter(n => connectedIds.has(n.id));
+      displayEdges = displayEdges.filter(e => 
         connectedIds.has(e.source) && connectedIds.has(e.target)
       );
     }
@@ -421,8 +428,9 @@ export function KnowledgeGraph({ className = "", isolatedNode }: KnowledgeGraphP
       timestamp: Date.now(),
     };
 
-    applyGraphData(nodes, edges);
-  }, [fileTree, applyGraphData]);
+    applyGraphData(nodes, edges, showFolders);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileTree, applyGraphData]); // showFolders 变化时不需要重建，只需要 loadGraph 重新应用缓存
 
   // 使用缓存或构建新图
   const loadGraph = useCallback(async () => {
@@ -431,14 +439,15 @@ export function KnowledgeGraph({ className = "", isolatedNode }: KnowledgeGraphP
     // 如果有缓存且文件树没变，直接使用缓存
     if (graphCache && graphCache.fileTreeHash === currentHash) {
       console.log("[Graph] Using cached data");
-      applyGraphData(graphCache.nodes, graphCache.edges);
+      applyGraphData(graphCache.nodes, graphCache.edges, showFolders);
       return;
     }
     
     // 否则重新构建
     console.log("[Graph] Building new graph...");
     await buildGraph();
-  }, [fileTree, buildGraph, applyGraphData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileTree, buildGraph, applyGraphData]); // showFolders 由专门的 effect 处理
 
   // Build graph on mount and when file tree changes
   useEffect(() => {
@@ -446,6 +455,14 @@ export function KnowledgeGraph({ className = "", isolatedNode }: KnowledgeGraphP
       loadGraph();
     }
   }, [fileTree, loadGraph]);
+
+  // 当 showFolders 切换时，直接从缓存重新应用（无需重建）
+  useEffect(() => {
+    if (graphCache) {
+      applyGraphData(graphCache.nodes, graphCache.edges, showFolders);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFolders]);
 
   // Handle resize
   useEffect(() => {
@@ -945,6 +962,16 @@ export function KnowledgeGraph({ className = "", isolatedNode }: KnowledgeGraphP
                 className="rounded border-border"
               />
               <span>{t.knowledgeGraph.showLabels}</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showFolders}
+                onChange={(e) => setShowFolders(e.target.checked)}
+                className="rounded border-border"
+              />
+              <span>{t.knowledgeGraph.showFolders}</span>
             </label>
           </div>
         </div>

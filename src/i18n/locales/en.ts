@@ -407,6 +407,7 @@ export default {
     visual: 'Visual Effects',
     nodeSize: 'Node Size',
     showLabels: 'Show Labels',
+    showFolders: 'Show Folder Nodes',
     isolateView: 'Isolate View',
     openNote: 'Open Note',
     linkedNotes: 'Linked Notes',
