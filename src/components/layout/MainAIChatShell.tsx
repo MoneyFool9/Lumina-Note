@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useRustAgentStore, initRustAgentListeners } from "@/stores/useRustAgentStore";
 import { useLocaleStore } from "@/stores/useLocaleStore";
-import { getAgentLoop } from "@/agent/core/AgentLoop";
+import { getAgentLoop } from "@/agent";
 import { useRAGStore } from "@/stores/useRAGStore";
+import { useNoteIndexStore } from "@/stores/useNoteIndexStore";
+
 import { useFileStore } from "@/stores/useFileStore";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 import { processMessageWithFiles } from "@/hooks/useChatSend";
@@ -30,11 +33,19 @@ import {
   AlertCircle,
   Check,
   Settings,
+  Microscope,
+  Globe,
 } from "lucide-react";
 import { AgentMessageRenderer } from "../chat/AgentMessageRenderer";
 import type { ReferencedFile } from "@/hooks/useChatSend";
 import { AISettingsModal } from "../ai/AISettingsModal";
 import type { MessageContent, TextContent } from "@/services/llm";
+import { DeepResearchCard } from "../deep-research";
+import { 
+  useDeepResearchStore, 
+  setupDeepResearchListener,
+  type DeepResearchConfig,
+} from "@/stores/useDeepResearchStore";
 
 // 从消息内容中提取文本（处理多模态内容）
 function getTextFromContent(content: MessageContent): string {
@@ -105,6 +116,7 @@ export function MainAIChatShell() {
   const [filePickerQuery, setFilePickerQuery] = useState("");
   const [referencedFiles, setReferencedFiles] = useState<ReferencedFile[]>([]);
   const [showDebug, setShowDebug] = useState(false);
+  const [enableWebSearch, setEnableWebSearch] = useState(false); // 网络搜索开关
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -113,10 +125,34 @@ export function MainAIChatShell() {
     WELCOME_EMOJIS[Math.floor(Math.random() * WELCOME_EMOJIS.length)]
   );
 
-  // Agent store
+  // ========== Rust Agent (新后端) ==========
   const {
-    status: agentStatus,
-    messages: agentMessages,
+    status: rustAgentStatus,
+    messages: rustAgentMessages,
+    streamingContent: _rustStreamingContent,
+    currentPlan: _rustCurrentPlan,
+    error: _rustError,
+    lastIntent: rustLastIntent,
+    totalTokensUsed: rustTotalTokens,
+    sessions: rustSessions,
+    currentSessionId: rustSessionId,
+    createSession: rustCreateSession,
+    switchSession: rustSwitchSession,
+    deleteSession: rustDeleteSession,
+    startTask: rustStartTask,
+    abort: rustAbort,
+    clearChat: rustClearChat,
+  } = useRustAgentStore();
+
+  // 初始化 Rust Agent 事件监听器
+  useEffect(() => {
+    initRustAgentListeners();
+  }, []);
+
+  // ========== 原 Agent store (备用) ==========
+  const {
+    status: legacyAgentStatus,
+    messages: legacyAgentMessages,
     sessions: agentSessions,
     currentSessionId: agentSessionId,
     createSession: createAgentSession,
@@ -125,13 +161,37 @@ export function MainAIChatShell() {
     pendingTool,
     approve,
     reject,
-    startTask,
-    abort: agentAbort,
+    startTask: legacyStartTask,
+    abort: legacyAgentAbort,
     checkFirstLoad: checkAgentFirstLoad,
     lastIntent,
     llmRequestStartTime,
     retryTimeout,
   } = useAgentStore();
+
+  // 使用 Rust Agent（设为 true 启用）
+  const USE_RUST_AGENT = true;
+  
+  // 根据开关选择使用哪个 Agent
+  const agentStatus = USE_RUST_AGENT ? rustAgentStatus : legacyAgentStatus;
+  const agentAbort = USE_RUST_AGENT ? rustAbort : legacyAgentAbort;
+  
+  // 转换 Rust Agent 消息格式以兼容 UI
+  const agentMessages = useMemo(() => {
+    if (USE_RUST_AGENT) {
+      return rustAgentMessages
+        // 过滤掉意图分析消息（只在调试面板显示）
+        .filter(msg => !msg.content?.includes('🎯 意图分析'))
+        .map(msg => ({
+          ...msg,
+          // 将 tool 消息显示为 assistant（工具调用结果）
+          role: msg.role === "tool" ? "assistant" as const : msg.role as "user" | "assistant" | "system",
+          // 保留原始内容
+          content: msg.content,
+        }));
+    }
+    return legacyAgentMessages;
+  }, [USE_RUST_AGENT, rustAgentMessages, legacyAgentMessages]);
 
   // Chat store - 使用 selector 确保状态变化时正确重新渲染
   const chatMessages = useAIStore((state) => state.messages);
@@ -156,12 +216,82 @@ export function MainAIChatShell() {
   useRAGStore();
   useAgentStore();
 
-  // 根据模式获取对应的会话数据
-  const sessions = chatMode === "agent" ? agentSessions : chatSessions;
-  const currentSessionId = chatMode === "agent" ? agentSessionId : chatSessionId;
-  const createSession = chatMode === "agent" ? createAgentSession : createChatSession;
-  const switchSession = chatMode === "agent" ? switchAgentSession : switchChatSession;
-  const deleteSession = chatMode === "agent" ? deleteAgentSession : deleteChatSession;
+  // Deep Research
+  const { startResearch, isRunning: isResearchRunning, abortResearch, currentSession: _researchSession, reset: resetResearch } = useDeepResearchStore();
+  
+  // 设置 Deep Research 事件监听
+  useEffect(() => {
+    setupDeepResearchListener();
+  }, []);
+
+  // Deep Research 会话
+  const {
+    sessions: researchSessions,
+    selectedSessionId: researchSelectedId,
+    selectSession: selectResearchSession,
+    deleteSession: deleteResearchSession,
+  } = useDeepResearchStore();
+
+  // 统一会话列表 - 合并所有类型，按更新时间排序
+  const allSessions = useMemo(() => {
+    const agentList = (USE_RUST_AGENT ? rustSessions : agentSessions).map(s => ({
+      ...s,
+      type: "agent" as const,
+    }));
+    const chatList = chatSessions.map(s => ({
+      ...s,
+      type: "chat" as const,
+    }));
+    const researchList = researchSessions.map(s => ({
+      ...s,
+      type: "research" as const,
+      title: s.topic,  // Research 用 topic 作为 title
+      updatedAt: (s.completedAt || s.startedAt).getTime(),
+    }));
+    return [...agentList, ...chatList, ...researchList].sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [rustSessions, agentSessions, chatSessions, researchSessions]);
+
+  // 根据模式获取创建会话函数
+  const createSession = chatMode === "agent" 
+    ? (USE_RUST_AGENT ? rustCreateSession : createAgentSession) 
+    : createChatSession;
+  
+  // 统一切换会话函数
+  const handleSwitchSession = useCallback((id: string, type: "agent" | "chat" | "research") => {
+    if (type === "agent") {
+      (USE_RUST_AGENT ? rustSwitchSession : switchAgentSession)(id);
+      if (chatMode !== "agent") setChatMode("agent");
+    } else if (type === "research") {
+      selectResearchSession(id);
+      // Research 会话点击后可以展示详情
+    } else {
+      switchChatSession(id);
+      if (chatMode !== "chat") setChatMode("chat");
+    }
+    setShowHistory(false);
+  }, [chatMode, setChatMode, rustSwitchSession, switchAgentSession, switchChatSession, selectResearchSession]);
+
+  // 统一删除会话函数
+  const handleDeleteSession = useCallback((id: string, type: "agent" | "chat" | "research") => {
+    if (type === "agent") {
+      (USE_RUST_AGENT ? rustDeleteSession : deleteAgentSession)(id);
+    } else if (type === "research") {
+      deleteResearchSession(id);
+    } else {
+      deleteChatSession(id);
+    }
+  }, [rustDeleteSession, deleteAgentSession, deleteChatSession, deleteResearchSession]);
+
+  // 判断是否当前会话
+  const isCurrentSession = useCallback((id: string, type: "agent" | "chat" | "research") => {
+    if (type === "agent") {
+      return chatMode === "agent" && (USE_RUST_AGENT ? rustSessionId : agentSessionId) === id;
+    }
+    if (type === "research") {
+      return researchSelectedId === id;
+    }
+    return chatMode === "chat" && chatSessionId === id;
+  }, [chatMode, rustSessionId, agentSessionId, chatSessionId, researchSelectedId]);
 
   const { vaultPath, currentFile, currentContent, fileTree, openFile } = useFileStore();
 
@@ -200,17 +330,21 @@ export function MainAIChatShell() {
 
   // 判断是否有对话历史（用于控制动画状态）
   // Chat 模式下，流式进行中也算已开始（确保流式消息能正确显示）
-  const hasStarted = chatMode === "agent"
-    ? agentMessages.length > 0
-    : chatMessages.length > 0 || chatStreaming;
+  const hasStarted = chatMode === "research"
+    ? _researchSession !== null
+    : chatMode === "agent"
+      ? agentMessages.length > 0
+      : chatMessages.length > 0 || chatStreaming;
 
   // 获取当前消息列表
   const messages = chatMode === "agent" ? agentMessages : chatMessages;
 
   // 判断是否正在加载
-  const isLoading = chatMode === "agent"
-    ? agentStatus === "running"
-    : chatLoading || chatStreaming;
+  const isLoading = chatMode === "research"
+    ? isResearchRunning
+    : chatMode === "agent"
+      ? agentStatus === "running"
+      : chatLoading || chatStreaming;
 
   // 自动滚动到底部
   useEffect(() => {
@@ -269,7 +403,11 @@ export function MainAIChatShell() {
 
   // 发送消息
   const handleSend = useCallback(async () => {
-    if ((!input.trim() && referencedFiles.length === 0) || isLoading) return;
+    console.log("[handleSend] Called, chatMode:", chatMode, "input:", input, "isLoading:", isLoading);
+    if ((!input.trim() && referencedFiles.length === 0) || isLoading) {
+      console.log("[handleSend] Blocked: input empty or loading");
+      return;
+    }
 
     // 检查是否仅仅是一个网页链接
     const webLink = isOnlyWebLink(input);
@@ -288,13 +426,55 @@ export function MainAIChatShell() {
 
     const { displayMessage, fullMessage } = await processMessageWithFiles(message, files);
 
-    if (chatMode === "agent") {
-      await startTask(fullMessage, {
-        workspacePath: vaultPath || "",
-        activeNote: currentFile || undefined,
-        activeNoteContent: currentFile ? currentContent : undefined,
-        displayMessage,
+    if (chatMode === "research") {
+      // Deep Research 模式
+      console.log("[DeepResearch] Research mode triggered, topic:", message);
+      // 使用 store 中的 config（已从持久化存储恢复）
+      // 处理 model === 'custom' 的情况
+      const actualModel = config.model === 'custom' ? (config.customModelId || config.model) : config.model;
+      
+      // 检查是否启用网络搜索（需要开关打开 + 配置了 Tavily API Key）
+      const shouldWebSearch = enableWebSearch && !!config.tavilyApiKey;
+      console.log("[DeepResearch] AI Config:", { ...config, model: actualModel, hasWebSearch: shouldWebSearch });
+      
+      const researchConfig: DeepResearchConfig = {
+        provider: config.provider,
+        model: actualModel,
+        api_key: config.apiKey,
+        base_url: config.baseUrl || undefined,
+        temperature: 0.7,
+        max_search_results: 20,
+        max_notes_to_read: 10,
+        report_style: "detailed",
+        include_citations: true,
+        locale: "zh-CN",
+        // 网络搜索配置
+        enable_web_search: shouldWebSearch,
+        tavily_api_key: config.tavilyApiKey || undefined,
+        max_web_search_results: 5,
+      };
+      await startResearch(message, vaultPath || "", researchConfig, {
+        reportStyle: "detailed",
+        includeCitations: true,
+        preSearchedNotes: [],
       });
+    } else if (chatMode === "agent") {
+      if (USE_RUST_AGENT) {
+        // 使用 Rust Agent
+        await rustStartTask(fullMessage, {
+          workspace_path: vaultPath || "",
+          active_note_path: currentFile || undefined,
+          active_note_content: currentFile ? currentContent : undefined,
+        });
+      } else {
+        // 使用原 TypeScript Agent
+        await legacyStartTask(fullMessage, {
+          workspacePath: vaultPath || "",
+          activeNote: currentFile || undefined,
+          activeNoteContent: currentFile ? currentContent : undefined,
+          displayMessage,
+        });
+      }
     } else {
       const currentFileInfo = currentFile ? {
         path: currentFile,
@@ -303,7 +483,7 @@ export function MainAIChatShell() {
       } : undefined;
       await sendMessageStream(fullMessage, currentFileInfo, displayMessage);
     }
-  }, [input, chatMode, isLoading, vaultPath, currentFile, currentContent, referencedFiles, startTask, sendMessageStream, isOnlyWebLink]);
+  }, [input, chatMode, isLoading, vaultPath, currentFile, currentContent, referencedFiles, rustStartTask, legacyStartTask, sendMessageStream, isOnlyWebLink, USE_RUST_AGENT, startResearch, enableWebSearch, config]);
 
   // 键盘事件
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -315,15 +495,36 @@ export function MainAIChatShell() {
 
   // 停止生成
   const handleStop = useCallback(() => {
-    if (chatMode === "agent") {
+    if (chatMode === "research") {
+      abortResearch();
+    } else if (chatMode === "agent") {
       agentAbort();
     } else {
       stopStreaming();
     }
-  }, [chatMode, agentAbort, stopStreaming]);
+  }, [chatMode, agentAbort, stopStreaming, abortResearch]);
 
   // 获取快捷操作列表
   const quickActions = useMemo(() => getQuickActions(t), [t]);
+
+  // 获取标签用于动态 placeholder
+  const { allTags } = useNoteIndexStore();
+  
+  // 动态 Research placeholder
+  const researchPlaceholder = useMemo(() => {
+    if (allTags.length === 0) {
+      return "输入研究主题，例如：React 性能优化...";
+    }
+    // 随机选择一个标签作为示例
+    const randomTag = allTags[Math.floor(Math.random() * Math.min(allTags.length, 10))];
+    const examples = [
+      `${randomTag?.tag || "React"} 最佳实践`,
+      `${randomTag?.tag || "设计模式"} 入门指南`,
+      `${randomTag?.tag || "性能优化"} 技巧总结`,
+    ];
+    const example = examples[Math.floor(Math.random() * examples.length)];
+    return `输入研究主题，例如：${example}...`;
+  }, [allTags]);
 
   // 快捷操作点击
   const handleQuickAction = (action: typeof quickActions[0]) => {
@@ -358,7 +559,16 @@ export function MainAIChatShell() {
 
   // 新建对话
   const handleNewChat = () => {
-    createSession();
+    if (chatMode === "research") {
+      // Research 模式: 重置当前研究会话，准备新研究
+      resetResearch();
+    } else if (chatMode === "agent" && USE_RUST_AGENT) {
+      // Rust Agent: 清空消息
+      rustClearChat();
+    } else {
+      // 原系统: 创建新会话
+      createSession();
+    }
     setShowHistory(false);
   };
 
@@ -389,7 +599,7 @@ export function MainAIChatShell() {
             <span>{t.ai.historyChats}</span>
           </button>
           <span className="ml-3 text-[11px] text-muted-foreground select-none">
-            {t.ai.sessionTokens}: {chatMode === "agent" ? agentTotalTokens : chatTotalTokens}
+            {t.ai.sessionTokens}: {chatMode === "agent" ? (USE_RUST_AGENT ? rustTotalTokens : agentTotalTokens) : chatTotalTokens}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -426,7 +636,7 @@ export function MainAIChatShell() {
               >
                 <div className="p-3 border-b border-border flex items-center justify-between">
                   <h3 className="text-xs font-medium text-muted-foreground">
-                    {chatMode === "agent" ? t.ai.agentChats : t.ai.chatChats}
+                    会话历史
                   </h3>
                   <button
                     onClick={() => setShowHistory(false)}
@@ -436,42 +646,65 @@ export function MainAIChatShell() {
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  {sessions.length === 0 ? (
+                  {allSessions.length === 0 ? (
                     <div className="p-4 text-xs text-muted-foreground text-center">
                       {t.ai.noHistory}
                     </div>
                   ) : (
-                    sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${session.id === currentSessionId
-                            ? "bg-muted"
-                            : "hover:bg-muted/50"
+                    allSessions.map((session) => {
+                      const isActive = isCurrentSession(session.id, session.type);
+                      // 根据类型选择图标和颜色
+                      const IconComponent = session.type === "agent" 
+                        ? Bot 
+                        : session.type === "research" 
+                          ? Microscope 
+                          : MessageSquare;
+                      const iconColor = session.type === "agent" 
+                        ? "text-purple-500" 
+                        : session.type === "research"
+                          ? "text-emerald-500"
+                          : "text-muted-foreground";
+                      
+                      return (
+                        <div
+                          key={session.id}
+                          className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                            isActive ? "bg-muted" : "hover:bg-muted/50"
                           }`}
-                        onClick={() => {
-                          switchSession(session.id);
-                          setShowHistory(false);
-                        }}
-                      >
-                        <MessageSquare size={14} className="text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium truncate">{session.title}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {formatTime(session.updatedAt)}
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteSession(session.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all"
-                          title={t.common.delete}
+                          onClick={() => handleSwitchSession(session.id, session.type)}
                         >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))
+                          <IconComponent size={14} className={`shrink-0 ${iconColor}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium truncate">{session.title}</div>
+                            <div className="flex items-center gap-1">
+                              {session.type === "agent" && (
+                                <span className="text-[9px] text-purple-600 bg-purple-50 dark:bg-purple-900/30 px-1 rounded">
+                                  Agent
+                                </span>
+                              )}
+                              {session.type === "research" && (
+                                <span className="text-[9px] text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1 rounded">
+                                  Research
+                                </span>
+                              )}
+                              <span className="text-[10px] text-muted-foreground">
+                                {formatTime(session.updatedAt)}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSession(session.id, session.type);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-all"
+                            title={t.common.delete}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </motion.div>
@@ -676,6 +909,9 @@ export function MainAIChatShell() {
                   </motion.div>
                 )}
 
+                {/* Deep Research 卡片 */}
+                <DeepResearchCard className="mb-6" />
+
                 <div ref={messagesEndRef} />
               </div>
             </div>
@@ -700,7 +936,7 @@ export function MainAIChatShell() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={chatMode === "agent" ? t.ai.agentInputPlaceholder : t.ai.chatInputPlaceholder}
+                    placeholder={chatMode === "research" ? researchPlaceholder : chatMode === "agent" ? t.ai.agentInputPlaceholder : t.ai.chatInputPlaceholder}
                     className="w-full resize-none outline-none text-foreground placeholder:text-muted-foreground min-h-[40px] max-h-[200px] bg-transparent text-base leading-relaxed"
                     rows={1}
                     autoFocus
@@ -789,7 +1025,7 @@ export function MainAIChatShell() {
                       )}
                     </div>
 
-                    {/* Agent/Chat 切换滑块 */}
+                    {/* Chat/Agent/Research 切换滑块 */}
                     <div className="flex items-center bg-muted rounded-lg p-0.5">
                       <button
                         onClick={() => setChatMode("chat")}
@@ -817,10 +1053,34 @@ export function MainAIChatShell() {
                           Agent
                         </span>
                       </button>
+                      <button
+                        onClick={() => setChatMode("research")}
+                        title="Deep Research - 深度研究笔记库"
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all duration-200 ${chatMode === "research"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                          }`}
+                      >
+                        <span className="flex items-center gap-1">
+                          <Microscope size={12} />
+                          Research
+                        </span>
+                      </button>
                     </div>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {config.apiKey ? "✓" : t.ai.notConfigured}
-                    </span>
+
+                    {/* 网络搜索按钮（独立于模式切换） */}
+                    <button
+                      onClick={() => setEnableWebSearch(!enableWebSearch)}
+                      title={enableWebSearch ? "关闭网络搜索" : "启用网络搜索（需配置 Tavily API Key）"}
+                      className={`ml-2 flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-all duration-200 ${
+                        enableWebSearch
+                          ? "bg-primary/10 text-primary border border-primary/30"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <Globe size={12} />
+                      {enableWebSearch && <Check size={10} />}
+                    </button>
 
                     {/* 设置按钮：紧挨着模式切换的小齿轮，打开 AI 对话设置 */}
                     <button
@@ -943,12 +1203,15 @@ export function MainAIChatShell() {
         {/* 调试面板 */}
         {showDebug && (() => {
           // 获取完整消息（包含 system prompt）
-          const fullMessages = getAgentLoop().getState().messages;
+          // 根据是否使用 Rust Agent 选择数据源
+          const fullMessages = USE_RUST_AGENT 
+            ? rustAgentMessages  // Rust Agent 消息
+            : getAgentLoop().getState().messages;  // 原 TypeScript Agent 消息
 
           return (
             <div className="fixed inset-4 z-50 bg-background/95 backdrop-blur border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
-                <h2 className="font-bold text-lg">🐛 {t.ai.agentDebugPanel}</h2>
+                <h2 className="font-bold text-lg">🐛 {t.ai.agentDebugPanel} {USE_RUST_AGENT && "(🦀 Rust)"}</h2>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
                     {t.ai.mode}: {chatMode} | {t.ai.status}: {agentStatus} | {t.ai.fullMsgsCount}: {fullMessages.length} | {t.ai.displayMsgsCount}: {agentMessages.length}
@@ -964,48 +1227,51 @@ export function MainAIChatShell() {
               <div className="flex-1 overflow-auto p-4 font-mono text-xs space-y-4">
                 {/* 意图识别调试信息 */}
                 <div className="p-3 rounded-lg border bg-muted/30 border-border mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-bold text-muted-foreground flex items-center gap-2">
-                      <span>🔍 {t.ai.intentResult}</span>
-                      {lastIntent && (
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] ${lastIntent.confidence > 0.8 ? 'bg-green-500/20 text-green-600' : 'bg-amber-500/20 text-amber-600'
-                          }`}>
-                          {(lastIntent.confidence * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                    {!lastIntent && (
-                      <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                        {t.ai.notTriggered}
-                      </span>
-                    )}
-                  </div>
+                  {(() => {
+                    // 使用 store 中的意图状态
+                    const displayIntent = USE_RUST_AGENT ? rustLastIntent : lastIntent;
 
-                  {lastIntent ? (
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <span className="text-muted-foreground w-16 shrink-0">Type:</span>
-                        <span className="font-bold text-foreground bg-background px-1 rounded border border-border/50">
-                          {lastIntent.type}
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <span className="text-muted-foreground w-16 shrink-0">Reason:</span>
-                        <span className="text-foreground/80 italic break-words">
-                          {lastIntent.reasoning}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground italic opacity-70">
-                      暂无意图数据。可能原因：
-                      <ul className="list-disc list-inside mt-1 space-y-0.5">
-                        <li>尚未发送消息</li>
-                        <li>未在设置中启用"动态路由" (Routing)</li>
-                        <li>路由配置不完整</li>
-                      </ul>
-                    </div>
-                  )}
+                    return (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-bold text-muted-foreground flex items-center gap-2">
+                            <span>🔍 {t.ai.intentResult}</span>
+                            {USE_RUST_AGENT && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-orange-500/20 text-orange-600">
+                                🦀 Rust
+                              </span>
+                            )}
+                            {displayIntent && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/20 text-green-600">
+                                ✓ 已识别
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {displayIntent ? (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <span className="text-muted-foreground w-16 shrink-0">Type:</span>
+                              <span className="font-bold text-foreground bg-background px-1 rounded border border-border/50">
+                                {displayIntent.type}
+                              </span>
+                            </div>
+                            <div className="flex gap-2">
+                              <span className="text-muted-foreground w-16 shrink-0">Route:</span>
+                              <span className="text-foreground/80">
+                                {'route' in displayIntent ? displayIntent.route : ('reasoning' in displayIntent ? displayIntent.reasoning : '-')}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground italic opacity-70">
+                            尚未发送消息，暂无意图数据。
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {fullMessages.map((msg, idx) => (

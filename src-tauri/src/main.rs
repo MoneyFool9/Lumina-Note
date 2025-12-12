@@ -10,6 +10,8 @@ mod vector_db;
 mod llm;
 mod cef;
 mod webdav;
+mod langgraph;
+mod agent;
 
 use tauri::Manager;
 
@@ -101,8 +103,20 @@ fn main() {
             webdav::commands::webdav_execute_sync,
             webdav::commands::webdav_quick_sync,
             webdav::commands::webdav_scan_local,
+            // Agent commands
+            agent::agent_start_task,
+            agent::agent_abort,
+            agent::agent_get_status,
+            agent::agent_continue_with_answer,
+            // Deep Research commands
+            agent::deep_research_start,
+            agent::deep_research_resume,
+            agent::deep_research_abort,
+            agent::deep_research_is_running,
         ])
         .manage(webdav::commands::WebDAVState::new())
+        .manage(agent::AgentState::new())
+        .manage(agent::DeepResearchStateManager::new())
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
             

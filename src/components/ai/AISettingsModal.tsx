@@ -947,6 +947,40 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
               </>
             )}
           </div>
+
+          {/* Deep Research 网络搜索设置 */}
+          <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Zap size={14} className="text-yellow-500" />
+              Deep Research 网络搜索
+            </div>
+            <p className="text-xs text-muted-foreground">
+              配置 Tavily API Key 以在深度研究时搜索互联网内容
+            </p>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                Tavily API Key
+                <a
+                  href="https://tavily.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary ml-1 hover:underline"
+                >
+                  (获取 API Key)
+                </a>
+              </label>
+              <input
+                type="password"
+                value={config.tavilyApiKey || ""}
+                onChange={(e) => setConfig({ tavilyApiKey: e.target.value })}
+                placeholder="tvly-xxxxxxxxxx"
+                className="w-full text-xs p-2 rounded border border-border bg-background"
+              />
+              {config.tavilyApiKey && (
+                <p className="text-xs text-green-500 mt-1">✓ 已配置，Deep Research 将搜索网络内容</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

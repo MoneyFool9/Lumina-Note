@@ -7,6 +7,8 @@ import { useState } from "react";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useRustAgentStore } from "@/stores/useRustAgentStore";
+import { useDeepResearchStore } from "@/stores/useDeepResearchStore";
 import {
   Bot,
   MessageSquare,
@@ -14,9 +16,13 @@ import {
   Trash2,
   PanelLeftClose,
   PanelLeftOpen,
+  Microscope,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocaleStore } from "@/stores/useLocaleStore";
+
+// 使用 Rust Agent（与 MainAIChatShell 保持一致）
+const USE_RUST_AGENT = true;
 
 interface ConversationListProps {
   className?: string;
@@ -36,19 +42,34 @@ export function ConversationList({ className }: ConversationListProps) {
     switchSession: switchChatSession,
   } = useAIStore();
 
-  // Agent mode sessions
+  // Agent mode sessions - 根据开关选择 store
+  const legacyAgentStore = useAgentStore();
+  const rustAgentStore = useRustAgentStore();
+  
+  const agentSessions = USE_RUST_AGENT ? rustAgentStore.sessions : legacyAgentStore.sessions;
+  const agentCurrentId = USE_RUST_AGENT ? rustAgentStore.currentSessionId : legacyAgentStore.currentSessionId;
+  const createAgentSession = USE_RUST_AGENT ? rustAgentStore.createSession : legacyAgentStore.createSession;
+  const deleteAgentSession = USE_RUST_AGENT ? rustAgentStore.deleteSession : legacyAgentStore.deleteSession;
+  const switchAgentSession = USE_RUST_AGENT ? rustAgentStore.switchSession : legacyAgentStore.switchSession;
+
+  // Deep Research sessions
   const {
-    sessions: agentSessions,
-    currentSessionId: agentCurrentId,
-    createSession: createAgentSession,
-    deleteSession: deleteAgentSession,
-    switchSession: switchAgentSession,
-  } = useAgentStore();
+    sessions: researchSessions,
+    selectedSessionId: researchSelectedId,
+    selectSession: selectResearchSession,
+    deleteSession: deleteResearchSession,
+  } = useDeepResearchStore();
 
   // 合并所有会话并标记类型，按更新时间排序
   const allSessions = [
     ...agentSessions.map((s) => ({ ...s, type: "agent" as const })),
     ...chatSessions.map((s) => ({ ...s, type: "chat" as const })),
+    ...researchSessions.map((s) => ({ 
+      ...s, 
+      type: "research" as const,
+      // 统一时间戳格式（Research 用 Date，其他用 number）
+      updatedAt: (s.completedAt || s.startedAt).getTime(),
+    })),
   ].sort((a, b) => b.updatedAt - a.updatedAt);
 
   const handleNewConversation = () => {
@@ -83,13 +104,17 @@ export function ConversationList({ className }: ConversationListProps) {
     }
   };
 
-  const handleSwitchSession = (id: string, type: "agent" | "chat") => {
+  const handleSwitchSession = (id: string, type: "agent" | "chat" | "research") => {
     if (type === "agent") {
       switchAgentSession(id);
       // 如果当前不是 agent 模式，切换过去
       if (chatMode !== "agent") {
         useUIStore.getState().setChatMode("agent");
       }
+    } else if (type === "research") {
+      // Deep Research - 选中会话后可以查看详情
+      selectResearchSession(id);
+      // TODO: 可以在这里触发显示研究详情的 UI
     } else {
       switchChatSession(id);
       if (chatMode !== "chat") {
@@ -98,18 +123,23 @@ export function ConversationList({ className }: ConversationListProps) {
     }
   };
 
-  const handleDeleteSession = (e: React.MouseEvent, id: string, type: "agent" | "chat") => {
+  const handleDeleteSession = (e: React.MouseEvent, id: string, type: "agent" | "chat" | "research") => {
     e.stopPropagation();
     if (type === "agent") {
       deleteAgentSession(id);
+    } else if (type === "research") {
+      deleteResearchSession(id);
     } else {
       deleteChatSession(id);
     }
   };
 
-  const isCurrentSession = (id: string, type: "agent" | "chat") => {
+  const isCurrentSession = (id: string, type: "agent" | "chat" | "research") => {
     if (type === "agent") {
       return chatMode === "agent" && agentCurrentId === id;
+    }
+    if (type === "research") {
+      return researchSelectedId === id;
     }
     return chatMode === "chat" && chatCurrentId === id;
   };
@@ -153,7 +183,22 @@ export function ConversationList({ className }: ConversationListProps) {
       <div className="flex-1 overflow-y-auto py-2">
         {allSessions.map((session) => {
           const isActive = isCurrentSession(session.id, session.type);
-          const Icon = session.type === "agent" ? Bot : MessageSquare;
+          // 根据类型选择图标
+          const Icon = session.type === "agent" 
+            ? Bot 
+            : session.type === "research" 
+              ? Microscope 
+              : MessageSquare;
+          // 获取显示标题（research 用 topic）
+          const displayTitle = session.type === "research" 
+            ? (session as typeof researchSessions[0] & { type: "research" }).topic 
+            : (session as { title: string }).title;
+          // 图标颜色
+          const iconColor = session.type === "agent" 
+            ? "text-purple-500" 
+            : session.type === "research"
+              ? "text-emerald-500"
+              : "text-slate-500";
 
           return (
             <div
@@ -165,14 +210,14 @@ export function ConversationList({ className }: ConversationListProps) {
                   ? "border-primary bg-background shadow-sm"
                   : "border-transparent hover:bg-background/50 hover:shadow-sm"
               )}
-              title={session.title}
+              title={displayTitle}
             >
               {/* 图标 */}
               <div className="min-w-[32px] flex justify-center">
                 <Icon
                   size={16}
                   className={cn(
-                    session.type === "agent" ? "text-purple-500" : "text-slate-500",
+                    iconColor,
                     isActive && "text-primary"
                   )}
                 />
@@ -188,12 +233,17 @@ export function ConversationList({ className }: ConversationListProps) {
                         isActive ? "text-foreground font-medium" : "text-muted-foreground"
                       )}
                     >
-                      {session.title}
+                      {displayTitle}
                     </p>
                     {/* 类型标签 */}
                     {session.type === "agent" && (
                       <span className="text-[10px] text-purple-600 bg-purple-50 dark:bg-purple-900/30 px-1.5 rounded-full inline-block mt-0.5">
                         Agent
+                      </span>
+                    )}
+                    {session.type === "research" && (
+                      <span className="text-[10px] text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1.5 rounded-full inline-block mt-0.5">
+                        Research
                       </span>
                     )}
                   </div>

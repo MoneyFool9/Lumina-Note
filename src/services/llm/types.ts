@@ -105,6 +105,9 @@ export interface LLMConfig {
   
   // 路由配置
   routing?: RoutingConfig;
+  
+  // Deep Research 网络搜索
+  tavilyApiKey?: string;
 }
 
 // ============ LLM 调用参数 ============

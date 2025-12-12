@@ -6,6 +6,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useRustAgentStore } from "@/stores/useRustAgentStore";
 import { useFileStore } from "@/stores/useFileStore";
 import { useLocaleStore } from "@/stores/useLocaleStore";
 import { ChatInput } from "./ChatInput";
@@ -26,6 +27,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+// 使用 Rust Agent（与 MainAIChatShell 保持一致）
+const USE_RUST_AGENT = true;
+
 export function AgentPanel() {
   const { t } = useLocaleStore();
   const [input, setInput] = useState("");
@@ -34,19 +38,35 @@ export function AgentPanel() {
     setInput((prev) => (prev ? prev + " " + text : text));
   });
 
-  const {
-    status,
-    messages,
-    pendingTool,
-    startTask,
-    abort,
-    approve,
-    reject,
-    clearChat,
-    retry,
-    llmRequestStartTime,
-    retryTimeout,
-  } = useAgentStore();
+  // 根据开关选择 store
+  const legacyStore = useAgentStore();
+  const rustStore = useRustAgentStore();
+  
+  // 选择实际使用的 store 数据
+  const status = USE_RUST_AGENT ? rustStore.status : legacyStore.status;
+  // 转换 Rust Agent 消息格式（tool role -> assistant）
+  const messages = USE_RUST_AGENT 
+    ? rustStore.messages.map(m => ({
+        ...m,
+        role: m.role === "tool" ? "assistant" as const : m.role,
+      }))
+    : legacyStore.messages;
+  const clearChat = USE_RUST_AGENT ? rustStore.clearChat : legacyStore.clearChat;
+  const abort = USE_RUST_AGENT ? rustStore.abort : legacyStore.abort;
+  
+  // Rust Agent 暂不支持的功能，使用旧 store 的
+  const { pendingTool, approve, reject, retry, llmRequestStartTime, retryTimeout } = legacyStore;
+  
+  // startTask 需要不同的参数格式
+  const startTask = USE_RUST_AGENT 
+    ? async (message: string, context: { workspacePath: string; activeNote?: string; activeNoteContent?: string; displayMessage?: string }) => {
+        await rustStore.startTask(message, {
+          workspace_path: context.workspacePath,
+          active_note_path: context.activeNote,
+          active_note_content: context.activeNoteContent,
+        });
+      }
+    : legacyStore.startTask;
 
   const { vaultPath, currentFile, currentContent } = useFileStore();
 

@@ -96,3 +96,15 @@ debug-logs/
 trae-agent/
 claude-code/
 banana-slides/
+deer-flow/
+langgraph/
+docs/deer-flow/
+
+# ===================
+# 废弃/备用代码（不提交）
+# ===================
+# LangGraph 浏览器版本（不能运行，已迁移到 Rust）
+src/agent/langgraph/
+
+# Deep Research 独立历史组件（已集成到 ConversationList）
+src/components/deep-research/ResearchHistory.tsx

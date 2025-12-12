@@ -122,7 +122,9 @@ function parseAssistantMessage(content: string, toolResults: Map<string, { resul
   let rawTextBeforeCompletion = text
     .replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, "") // 移除所有标签对
     .replace(/<[^>]+>/g, "") // 移除单个标签
-    .replace(/\s+/g, " ")
+    // 只压缩连续空格，保留换行符
+    .replace(/[^\S\n]+/g, " ")  // 非换行的空白字符压缩为单个空格
+    .replace(/\n{3,}/g, "\n\n") // 超过2个连续换行压缩为2个
     .trim();
 
   // 移除 DeepSeek 的特殊标签
@@ -221,9 +223,39 @@ function decodeHtmlEntities(str: string): string {
  */
 function collectToolResults(messages: Message[]): Map<string, { result: string; success: boolean }> {
   const toolResults = new Map<string, { result: string; success: boolean }>();
+  
+  // 用于跟踪最近的工具调用（Rust Agent 格式）
+  let lastToolCall: { name: string; params: string } | null = null;
 
   messages.forEach(msg => {
     const content = getTextFromContent(msg.content);
+
+    // Rust Agent 格式：🔧 tool_name: {...}
+    if (content.startsWith('🔧')) {
+      const match = content.match(/🔧\s*(\w+):\s*(.+)/);
+      if (match) {
+        lastToolCall = { name: match[1], params: match[2] };
+      }
+      return;
+    }
+    
+    // Rust Agent 格式：✅ 结果... 或 ❌ 错误...
+    if (content.startsWith('✅') && lastToolCall) {
+      const result = content.slice(1).trim();
+      const key = getToolCallKey(lastToolCall.name, lastToolCall.params);
+      toolResults.set(key, { result, success: true });
+      toolResults.set(lastToolCall.name, { result, success: true });
+      lastToolCall = null;
+      return;
+    }
+    if (content.startsWith('❌') && lastToolCall) {
+      const result = content.slice(1).trim();
+      const key = getToolCallKey(lastToolCall.name, lastToolCall.params);
+      toolResults.set(key, { result, success: false });
+      toolResults.set(lastToolCall.name, { result, success: false });
+      lastToolCall = null;
+      return;
+    }
 
     // 提取 tool_result：<tool_result name="xxx" params="...">结果</tool_result>
     // 或旧格式：<tool_result name="xxx">结果</tool_result>
@@ -495,6 +527,12 @@ export const AgentMessageRenderer = memo(function AgentMessageRenderer({
   llmRequestStartTime,
   onRetryTimeout,
 }: AgentMessageRendererProps) {
+  // 调试日志
+  console.log("[AgentMessageRenderer] messages:", messages.length, messages.map(m => ({
+    role: m.role,
+    content: getTextFromContent(m.content).slice(0, 50)
+  })));
+  
   // 使用可复用的超时检测 hook
   const { isTimeout: isLongRunning } = useTimeout(llmRequestStartTime ?? null, {
     threshold: TIMEOUT_THRESHOLD_MS,
@@ -541,20 +579,53 @@ export const AgentMessageRenderer = memo(function AgentMessageRenderer({
       const allToolCalls: ToolCallInfo[] = [];
       let finalAnswer = "";
 
-      assistantMessages.forEach(msg => {
-        const parsed = parseAssistantMessage(getTextFromContent(msg.content), toolResults);
+      assistantMessages.forEach((msg, msgIdx) => {
+        const content = getTextFromContent(msg.content);
+        
+        // 处理 Rust Agent 的工具调用消息（格式: 🔧 tool_name: {...}）
+        if (content.startsWith('🔧')) {
+          const match = content.match(/🔧\s*(\w+):\s*(.+)/);
+          if (match) {
+            const toolName = match[1];
+            const toolParams = match[2];
+            // 查找对应的工具结果
+            const resultKey = `${toolName}::${toolParams.slice(0, 100)}`;
+            const resultData = toolResults.get(resultKey) || toolResults.get(toolName);
+            allToolCalls.push({
+              name: toolName,
+              params: toolParams,
+              result: resultData?.result,
+              success: resultData?.success,
+            });
+          }
+          return;
+        }
+        
+        // 处理 Rust Agent 的工具结果消息（格式: ✅ 结果 或 ❌ 错误）
+        if (content.startsWith('✅') || content.startsWith('❌')) {
+          // 工具结果已经在 toolResults 中收集，这里跳过
+          return;
+        }
+        
+        const parsed = parseAssistantMessage(content, toolResults);
         allThinkingBlocks.push(...parsed.thinkingBlocks);
         allToolCalls.push(...parsed.toolCalls);
+        
         // 优先使用 attempt_completion_result 或 attempt_completion 中的 result
         if (parsed.finalAnswer) {
           finalAnswer = parsed.finalAnswer;
         }
-        // 如果没有结构化的 finalAnswer，保留解析出的纯文本（rawTextBeforeCompletion）作为回退
-        if (!finalAnswer && parsed.rawTextBeforeCompletion) {
-          // 仅在回退文本非空时使用
+        
+        // 如果没有结构化的 finalAnswer，使用纯文本
+        // 对于 Rust Agent，优先使用最后一条消息（reporter 的回复）
+        if (parsed.rawTextBeforeCompletion) {
           const fallback = parsed.rawTextBeforeCompletion.trim();
           if (fallback.length > 0) {
-            finalAnswer = fallback;
+            // 最后一条消息的优先级最高（通常是 reporter 的总结）
+            const isLastMessage = msgIdx === assistantMessages.length - 1;
+            if (isLastMessage || !finalAnswer) {
+              finalAnswer = fallback;
+            }
           }
         }
       });
@@ -618,7 +689,39 @@ export const AgentMessageRenderer = memo(function AgentMessageRenderer({
                   {round.finalAnswer && (
                     <div
                       className="prose prose-sm dark:prose-invert max-w-none leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: parseMarkdown(round.finalAnswer) }}
+                      dangerouslySetInnerHTML={{ __html: (() => {
+                        let content = round.finalAnswer;
+                        
+                        // 如果内容换行符很少，尝试添加必要的换行
+                        const newlineCount = (content.match(/\n/g) || []).length;
+                        const contentLength = content.length;
+                        // 如果平均每 200 字符不到一个换行，说明换行符不足
+                        if (contentLength > 100 && newlineCount < contentLength / 200) {
+                          // 在 Markdown 标记前添加换行符
+                          content = content
+                            // 标题 (# ## ### 等)
+                            .replace(/(?<!^|\n)(#{1,6}\s)/g, '\n\n$1')
+                            // 表格行 (| xxx | xxx |)
+                            .replace(/(?<!^|\n)(\|[^|]+\|)/g, '\n$1')
+                            // 粗体段落开头 (**xxx**)
+                            .replace(/(?<!^|\n)(\*\*[^*]+\*\*)/g, '\n$1')
+                            // emoji 段落开头 (✅ 📊 💡 等)
+                            .replace(/(?<!^|\n)([\u{1F300}-\u{1F9FF}]\s)/gu, '\n\n$1')
+                            // 有序列表 (1. 2. 等)
+                            .replace(/(?<!^|\n)(\d+\.\s)/g, '\n$1')
+                            // 无序列表 (- 开头)
+                            .replace(/(?<!^|\n)(-\s+\*\*)/g, '\n$1')
+                            // 分隔线
+                            .replace(/(---)/g, '\n$1\n')
+                            // 清理多余换行
+                            .replace(/\n{3,}/g, '\n\n')
+                            .trim();
+                          console.log("[AgentMessageRenderer] Enhanced newlines, original:", newlineCount, "chars:", contentLength);
+                        }
+                        
+                        const html = parseMarkdown(content);
+                        return html;
+                      })() }}
                     />
                   )}
                 </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useRustAgentStore } from "@/stores/useRustAgentStore";
 import { useFileStore } from "@/stores/useFileStore";
 import { useNoteIndexStore } from "@/stores/useNoteIndexStore";
 import { useRAGStore } from "@/stores/useRAGStore";
@@ -357,7 +358,14 @@ export function RightPanel() {
     cancelIndex,
     lastError: ragError,
   } = useRAGStore();
-  const { autoApprove, setAutoApprove, checkFirstLoad: checkAgentFirstLoad } = useAgentStore();
+  // 根据开关选择 Agent store
+  const legacyAgentStore = useAgentStore();
+  const rustAgentStore = useRustAgentStore();
+  const USE_RUST_AGENT = true;
+  
+  const autoApprove = USE_RUST_AGENT ? rustAgentStore.autoApprove : legacyAgentStore.autoApprove;
+  const setAutoApprove = USE_RUST_AGENT ? rustAgentStore.setAutoApprove : legacyAgentStore.setAutoApprove;
+  const checkAgentFirstLoad = legacyAgentStore.checkFirstLoad; // Rust Agent 暂不需要
   
   const [showSettings, setShowSettings] = useState(false);
   const [isDraggingAI, setIsDraggingAI] = useState(false);

@@ -8,7 +8,9 @@ import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useFileStore } from "@/stores/useFileStore";
 import { useAgentStore } from "@/stores/useAgentStore";
+import { useRustAgentStore } from "@/stores/useRustAgentStore";
 import { useLocaleStore } from "@/stores/useLocaleStore";
+
 import { 
   Bot, 
   BrainCircuit, 
@@ -36,7 +38,11 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
     clearChat,
     checkFirstLoad: checkChatFirstLoad,
   } = useAIStore();
-  const { checkFirstLoad: checkAgentFirstLoad } = useAgentStore();
+  // 根据开关选择 Agent store
+  const legacyAgentStore = useAgentStore();
+  const _rustAgentStore = useRustAgentStore(); // 保留引用，由 AgentPanel/ConversationList 使用
+  const USE_RUST_AGENT = true;
+  const checkAgentFirstLoad = legacyAgentStore.checkFirstLoad; // Rust Agent 暂不需要
   useFileStore(); // Hook for store subscription
 
   const [showSettings, setShowSettings] = useState(false);
