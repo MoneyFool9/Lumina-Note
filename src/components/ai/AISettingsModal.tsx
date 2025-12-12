@@ -4,7 +4,7 @@ import { useAgentStore } from "@/stores/useAgentStore";
 import { useRAGStore } from "@/stores/useRAGStore";
 import { useBrowserStore } from "@/stores/useBrowserStore";
 import { PROVIDER_REGISTRY, type LLMProviderType, createProvider } from "@/services/llm";
-import { Settings, Tag, Loader2, Check, X, Zap } from "lucide-react";
+import { Settings, Tag, Loader2, Check, X, Zap, AlertTriangle } from "lucide-react";
 import { useLocaleStore } from "@/stores/useLocaleStore";
 
 // 测试连接状态类型
@@ -336,7 +336,7 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
           <div className="space-y-2 pt-3 border-t border-border">
             <div className="flex items-center justify-between text-xs font-medium text-foreground">
               <span className="flex items-center gap-1">
-                <span className="text-lg">⚡</span>
+                <Zap size={16} className="text-amber-500" />
                 动态路由 (Intent Routing)
               </span>
               <label className="flex items-center gap-1 cursor-pointer">
@@ -540,7 +540,7 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
 
                   {!config.routing.chatProvider ? (
                     <div className="p-2 bg-muted/50 rounded border border-border/50 text-[10px] text-muted-foreground">
-                      <span className="text-amber-500 mr-1">⚠️</span>
+                      <AlertTriangle size={12} className="text-amber-500 inline mr-1" />
                       未配置专用聊天模型，将使用主模型处理所有任务。建议配置轻量级模型（如 GPT-4o-mini, Gemini Flash）以降低成本并提高速度。
                     </div>
                   ) : (
@@ -883,7 +883,7 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
                         索引中...
                       </span>
                     ) : indexStatus?.initialized ? (
-                      <span className="text-green-500">✓ 已就绪</span>
+                      <span className="text-green-500 flex items-center gap-1"><Check size={12} /> 已就绪</span>
                     ) : (
                       <span className="text-muted-foreground">未初始化</span>
                     )}
@@ -977,7 +977,7 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
                 className="w-full text-xs p-2 rounded border border-border bg-background"
               />
               {config.tavilyApiKey && (
-                <p className="text-xs text-green-500 mt-1">✓ 已配置，Deep Research 将搜索网络内容</p>
+                <p className="text-xs text-green-500 mt-1 flex items-center gap-1"><Check size={12} /> 已配置，Deep Research 将搜索网络内容</p>
               )}
             </div>
           </div>

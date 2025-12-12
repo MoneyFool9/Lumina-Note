@@ -22,6 +22,8 @@ import {
   ArrowUpRight,
   ChevronRight,
   Bot,
+  Search,
+  Lightbulb,
 } from "lucide-react";
 import { AgentPanel } from "../chat/AgentPanel";
 import { ConversationList } from "../chat/ConversationList";
@@ -562,7 +564,7 @@ export function RightPanel() {
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* 返回按钮 */}
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium">⚙️ {t.settingsPanel.title}</h3>
+                <h3 className="text-sm font-medium flex items-center gap-1.5"><Settings size={14} /> {t.settingsPanel.title}</h3>
                 <button
                   onClick={() => setShowSettings(false)}
                   className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted transition-colors"
@@ -572,7 +574,7 @@ export function RightPanel() {
               </div>
               {/* AI Provider Settings */}
               <div className="space-y-2">
-                <div className="text-xs font-medium text-foreground">🤖 {t.settingsPanel.aiChatSettings}</div>
+                <div className="text-xs font-medium text-foreground flex items-center gap-1.5"><Bot size={12} /> {t.settingsPanel.aiChatSettings}</div>
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">{t.settingsPanel.provider}</label>
                   <select
@@ -646,7 +648,7 @@ export function RightPanel() {
                       className="w-full text-xs p-2 rounded border border-border bg-background"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      💡 {t.settingsPanel.customModelHint}
+                      <Lightbulb size={12} className="inline" /> {t.settingsPanel.customModelHint}
                     </p>
                   </div>
                 )}
@@ -691,7 +693,7 @@ export function RightPanel() {
 
               {/* Agent Settings */}
               <div className="space-y-2 pt-3 border-t border-border">
-                <div className="text-xs font-medium text-foreground">🤖 {t.settingsPanel.agentSettings}</div>
+                <div className="text-xs font-medium text-foreground flex items-center gap-1.5"><Bot size={12} /> {t.settingsPanel.agentSettings}</div>
                 <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
                   <input
                     type="checkbox"
@@ -707,7 +709,7 @@ export function RightPanel() {
               {/* RAG Settings */}
               <div className="space-y-2 pt-3 border-t border-border">
                 <div className="text-xs font-medium text-foreground flex items-center justify-between">
-                  <span>🔍 {t.settingsPanel.semanticSearch}</span>
+                  <span className="flex items-center gap-1.5"><Search size={12} /> {t.settingsPanel.semanticSearch}</span>
                   <label className="flex items-center gap-1 cursor-pointer">
                     <input
                       type="checkbox"
