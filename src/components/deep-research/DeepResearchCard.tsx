@@ -518,9 +518,10 @@ function ReportContent({
 
 interface DeepResearchCardProps {
   className?: string;
+  chatId?: string | null;  // 当前聊天对话 ID，用于过滤显示
 }
 
-export function DeepResearchCard({ className }: DeepResearchCardProps) {
+export function DeepResearchCard({ className, chatId }: DeepResearchCardProps) {
   const { 
     currentSession, 
     isRunning, 
@@ -528,6 +529,9 @@ export function DeepResearchCard({ className }: DeepResearchCardProps) {
     submitClarification,
     reset 
   } = useDeepResearchStore();
+
+  // 只显示属于当前聊天的 research session
+  const shouldShow = currentSession && (!chatId || currentSession.chatId === chatId);
 
   const [isExpanded, setIsExpanded] = useState(true);
   const [showReport, setShowReport] = useState(false);
@@ -556,8 +560,8 @@ export function DeepResearchCard({ className }: DeepResearchCardProps) {
   const isStreaming =
     isRunning && currentSession?.phase === "writing_report";
 
-  // 没有会话时不渲染
-  if (!currentSession) return null;
+  // 没有会话或不属于当前聊天时不渲染
+  if (!shouldShow) return null;
 
   const { topic, phase, phaseMessage, keywords, foundNotes, webSearchResults, crawlingProgress, readingProgress, tokenUsage, error } =
     currentSession;

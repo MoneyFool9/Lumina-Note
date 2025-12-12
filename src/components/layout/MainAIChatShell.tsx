@@ -482,6 +482,7 @@ export function MainAIChatShell() {
         max_web_search_results: 10,
       };
       await startResearch(message, vaultPath || "", researchConfig, {
+        chatId: chatSessionId || undefined,
         reportStyle: "detailed",
         includeCitations: true,
         preSearchedNotes: [],
@@ -938,7 +939,7 @@ export function MainAIChatShell() {
                 )}
 
                 {/* Deep Research 卡片 */}
-                <DeepResearchCard className="mb-6" />
+                <DeepResearchCard className="mb-6" chatId={chatSessionId} />
 
                 <div ref={messagesEndRef} />
               </div>

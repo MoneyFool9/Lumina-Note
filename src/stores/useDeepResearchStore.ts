@@ -102,6 +102,7 @@ export interface TokenUsage {
 /** 研究会话 */
 export interface ResearchSession {
   id: string;
+  chatId: string;  // 关联的聊天对话 ID
   topic: string;
   startedAt: Date;
   completedAt?: Date;  // 完成时间
@@ -142,6 +143,7 @@ interface DeepResearchState {
     workspacePath: string,
     config: DeepResearchConfig,
     options?: {
+      chatId?: string;  // 关联的聊天对话 ID
       searchScope?: string;
       reportStyle?: ReportStyle;
       includeCitations?: boolean;
@@ -209,6 +211,7 @@ export const useDeepResearchStore = create<DeepResearchState>()(
 
       startResearch: async (topic, workspacePath, config, options = {}) => {
     const {
+      chatId = crypto.randomUUID(),  // 默认生成一个 ID
       searchScope,
       reportStyle = "detailed",
       includeCitations = true,
@@ -218,6 +221,7 @@ export const useDeepResearchStore = create<DeepResearchState>()(
     // 创建新会话
     const session: ResearchSession = {
       id: crypto.randomUUID(),
+      chatId,
       topic,
       startedAt: new Date(),
       phase: "init",
