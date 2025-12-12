@@ -15,8 +15,9 @@ import { listen, UnlistenFn } from "@tauri-apps/api/event";
 export type ResearchPhase =
   | "init"
   | "analyzing_topic"
-  | "waiting_for_clarification"  // 新增：等待用户澄清
+  | "waiting_for_clarification"  // 等待用户澄清
   | "searching_notes"
+  | "searching_web"  // 搜索网络
   | "reading_notes"
   | "generating_outline"
   | "writing_report"
@@ -508,6 +509,7 @@ export function getPhaseLabel(phase: ResearchPhase): string {
     analyzing_topic: "分析主题",
     waiting_for_clarification: "等待澄清",
     searching_notes: "搜索笔记",
+    searching_web: "搜索网络",
     reading_notes: "阅读笔记",
     generating_outline: "生成大纲",
     writing_report: "撰写报告",
@@ -523,8 +525,9 @@ export function getPhaseProgress(phase: ResearchPhase): number {
     init: 0,
     analyzing_topic: 15,
     waiting_for_clarification: 10,  // 等待用户输入时暂停
-    searching_notes: 30,
-    reading_notes: 50,
+    searching_notes: 25,
+    searching_web: 40,
+    reading_notes: 55,
     generating_outline: 70,
     writing_report: 85,
     completed: 100,
@@ -537,6 +540,7 @@ export function getPhaseProgress(phase: ResearchPhase): number {
 export const RESEARCH_PHASES: ResearchPhase[] = [
   "analyzing_topic",
   "searching_notes",
+  "searching_web",
   "reading_notes",
   "generating_outline",
   "writing_report",

@@ -26,6 +26,7 @@ import {
   MessageCircleQuestion,
   Send,
   Lightbulb,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -49,6 +50,7 @@ function PhaseIcon({ phase }: { phase: ResearchPhase }) {
     analyzing_topic: <Search className="w-4 h-4" />,
     waiting_for_clarification: <MessageCircleQuestion className="w-4 h-4" />,
     searching_notes: <FileText className="w-4 h-4" />,
+    searching_web: <Globe className="w-4 h-4" />,
     reading_notes: <BookOpen className="w-4 h-4" />,
     generating_outline: <ListTree className="w-4 h-4" />,
     writing_report: <PenLine className="w-4 h-4" />,

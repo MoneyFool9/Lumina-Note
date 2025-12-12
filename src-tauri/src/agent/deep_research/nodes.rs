@@ -21,6 +21,116 @@ fn emit_event(app: &AppHandle, event: DeepResearchEvent) {
     let _ = app.emit("deep-research-event", &event);
 }
 
+/// 从 LLM 响应中提取 JSON
+/// 
+/// 处理多种常见格式：
+/// - 纯 JSON
+/// - ```json ... ``` 代码块
+/// - ``` ... ``` 代码块
+/// - 带有前缀/后缀文字的 JSON
+fn extract_json(text: &str) -> Result<String, String> {
+    let text = text.trim();
+    
+    // 空响应
+    if text.is_empty() {
+        return Err("LLM 返回了空响应".to_string());
+    }
+    
+    // 1. 尝试处理 ```json ... ``` 格式
+    if let Some(start_idx) = text.find("```json") {
+        let json_start = start_idx + 7; // 跳过 "```json"
+        if let Some(end_idx) = text[json_start..].find("```") {
+            let json_str = text[json_start..json_start + end_idx].trim();
+            if !json_str.is_empty() {
+                return Ok(json_str.to_string());
+            }
+        }
+    }
+    
+    // 2. 尝试处理 ``` ... ``` 格式（无语言标识）
+    if text.starts_with("```") && !text.starts_with("```json") {
+        let json_start = text.find('\n').map(|i| i + 1).unwrap_or(3);
+        if let Some(end_idx) = text[json_start..].find("```") {
+            let json_str = text[json_start..json_start + end_idx].trim();
+            if !json_str.is_empty() {
+                return Ok(json_str.to_string());
+            }
+        }
+    }
+    
+    // 3. 尝试找到 JSON 对象的边界 { ... }
+    if let Some(start_idx) = text.find('{') {
+        // 找到匹配的结束括号
+        let mut depth = 0;
+        let mut end_idx = start_idx;
+        let chars: Vec<char> = text.chars().collect();
+        
+        for (i, &ch) in chars.iter().enumerate().skip(start_idx) {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end_idx = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        if depth == 0 && end_idx > start_idx {
+            let json_str: String = chars[start_idx..=end_idx].iter().collect();
+            return Ok(json_str);
+        }
+    }
+    
+    // 4. 尝试找到 JSON 数组的边界 [ ... ]
+    if let Some(start_idx) = text.find('[') {
+        let mut depth = 0;
+        let mut end_idx = start_idx;
+        let chars: Vec<char> = text.chars().collect();
+        
+        for (i, &ch) in chars.iter().enumerate().skip(start_idx) {
+            match ch {
+                '[' => depth += 1,
+                ']' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end_idx = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        if depth == 0 && end_idx > start_idx {
+            let json_str: String = chars[start_idx..=end_idx].iter().collect();
+            return Ok(json_str);
+        }
+    }
+    
+    // 5. 如果都找不到，返回原文（让 JSON 解析器报告具体错误）
+    Ok(text.to_string())
+}
+
+/// 解析 JSON 并提供更好的错误信息
+fn parse_json<T: serde::de::DeserializeOwned>(text: &str, context: &str) -> Result<T, String> {
+    let json_str = extract_json(text)?;
+    
+    serde_json::from_str(&json_str).map_err(|e| {
+        // 提供更详细的错误信息
+        let preview: String = json_str.chars().take(200).collect();
+        format!(
+            "{}: {} (响应预览: {}...)",
+            context,
+            e,
+            preview
+        )
+    })
+}
+
 // ============ 节点实现 ============
 
 /// 分析主题节点
@@ -73,9 +183,11 @@ pub async fn analyze_topic_node(
     let intent_response = llm.call_simple(&intent_prompt).await
         .unwrap_or_else(|_| r#"{"intent": "RESEARCH"}"#.to_string());
 
-    // 解析意图
-    let intent_json: serde_json::Value = serde_json::from_str(&intent_response)
-        .unwrap_or_else(|_| serde_json::json!({"intent": "RESEARCH"}));
+    // 解析意图（使用健壮的 JSON 提取）
+    let intent_json: serde_json::Value = extract_json(&intent_response)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({"intent": "RESEARCH"}));
     
     let intent = intent_json["intent"].as_str().unwrap_or("RESEARCH").to_uppercase();
 
@@ -295,8 +407,19 @@ pub async fn search_notes_node(
 
     state.found_notes = all_results;
 
+    emit_event(app, DeepResearchEvent::NotesFound {
+        notes: state.found_notes.clone(),
+    });
+
     // ============ 网络搜索 ============
     if let Some(tavily_client) = tavily {
+        // 切换到网络搜索阶段
+        state.phase = ResearchPhase::SearchingWeb;
+        emit_event(app, DeepResearchEvent::PhaseChange {
+            phase: state.phase.clone(),
+            message: "正在搜索网络获取相关内容...".to_string(),
+        });
+        
         #[cfg(debug_assertions)]
         println!("[DeepResearch] 执行网络搜索...");
         
@@ -319,10 +442,6 @@ pub async fn search_notes_node(
             }
         }
     }
-
-    emit_event(app, DeepResearchEvent::NotesFound {
-        notes: state.found_notes.clone(),
-    });
 
     // 如果既没有笔记也没有网络搜索结果，才报错
     if state.found_notes.is_empty() && state.web_search_results.is_empty() {
@@ -558,12 +677,40 @@ fn get_random_tags(workspace_path: &str, count: usize) -> Vec<String> {
 /// 阅读笔记节点
 /// 
 /// 批量读取找到的笔记内容
+/// 如果没有本地笔记但有网络结果，跳过此阶段直接生成大纲
 pub async fn read_notes_node(
     app: &AppHandle,
     llm: &Arc<LlmClient>,
     mut state: DeepResearchState,
     max_notes: usize,
 ) -> Result<NodeResult, String> {
+    // 如果没有本地笔记，检查是否有网络结果
+    if state.found_notes.is_empty() {
+        if !state.web_search_results.is_empty() {
+            // 有网络结果，跳过阅读笔记阶段，直接生成大纲
+            #[cfg(debug_assertions)]
+            println!("[DeepResearch] 无本地笔记，使用 {} 个网络搜索结果生成报告", state.web_search_results.len());
+            
+            emit_event(app, DeepResearchEvent::PhaseChange {
+                phase: ResearchPhase::ReadingNotes,
+                message: "本地无相关笔记，将基于网络搜索结果生成报告...".to_string(),
+            });
+            
+            return Ok(NodeResult {
+                state,
+                next_node: Some("generate_outline".to_string()),
+            });
+        } else {
+            // 既没有笔记也没有网络结果
+            state.phase = ResearchPhase::Error;
+            state.error = Some("未找到相关笔记或网络内容".to_string());
+            return Ok(NodeResult {
+                state,
+                next_node: None,
+            });
+        }
+    }
+
     state.phase = ResearchPhase::ReadingNotes;
     emit_event(app, DeepResearchEvent::PhaseChange {
         phase: state.phase.clone(),
@@ -626,7 +773,8 @@ pub async fn read_notes_node(
         state.read_notes.push(note_content);
     }
 
-    if state.read_notes.is_empty() {
+    // 即使部分笔记读取失败，只要有网络结果或读取到的笔记，就继续
+    if state.read_notes.is_empty() && state.web_search_results.is_empty() {
         state.phase = ResearchPhase::Error;
         state.error = Some("无法读取任何笔记内容".to_string());
         return Ok(NodeResult {
@@ -643,7 +791,7 @@ pub async fn read_notes_node(
 
 /// 生成大纲节点
 /// 
-/// 基于阅读的笔记内容，生成报告大纲
+/// 基于阅读的笔记内容和/或网络搜索结果，生成报告大纲
 pub async fn generate_outline_node(
     app: &AppHandle,
     llm: &Arc<LlmClient>,
@@ -656,24 +804,40 @@ pub async fn generate_outline_node(
     });
 
     // 构建笔记摘要
-    let notes_summary: String = state.read_notes
-        .iter()
-        .map(|n| {
-            let summary = n.summary.as_ref().map(|s| format!("\n   摘要: {}", s)).unwrap_or_default();
-            format!("- {} ({}){}", n.title, n.path, summary)
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let notes_summary: String = if state.read_notes.is_empty() {
+        "（无本地笔记）".to_string()
+    } else {
+        state.read_notes
+            .iter()
+            .map(|n| {
+                let summary = n.summary.as_ref().map(|s| format!("\n   摘要: {}", s)).unwrap_or_default();
+                format!("- {} ({}){}", n.title, n.path, summary)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    // 构建网络搜索结果摘要
+    let web_summary: String = if state.web_search_results.is_empty() {
+        String::new()
+    } else {
+        let web_content = state.web_search_results
+            .iter()
+            .map(|w| format!("- {} ({})\n  {}", w.title, w.url, w.content.chars().take(200).collect::<String>()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("\n\n网络搜索结果：\n{}", web_content)
+    };
 
     let prompt = format!(
-        r#"你是一个研究助手。基于以下笔记内容，为研究主题生成一个报告大纲。
+        r#"你是一个研究助手。基于以下内容，为研究主题生成一个报告大纲。
 
 研究主题：{}
 
 相关笔记：
-{}
+{}{}
 
-请生成一个 JSON 格式的报告大纲，包含标题和 3-5 个章节，每个章节有要点和相关笔记引用。
+请生成一个 JSON 格式的报告大纲，包含标题和 3-5 个章节，每个章节有要点和相关引用来源。
 格式：
 {{
   "title": "报告标题",
@@ -681,21 +845,21 @@ pub async fn generate_outline_node(
     {{
       "heading": "章节标题",
       "points": ["要点1", "要点2"],
-      "related_notes": ["note1.md", "note2.md"]
+      "related_notes": ["来源1", "来源2"]
     }}
   ]
 }}
 
 请直接返回 JSON，不要其他内容："#,
         state.topic,
-        notes_summary
+        notes_summary,
+        web_summary
     );
 
     let response = llm.call_simple(&prompt).await?;
     
-    // 解析 JSON
-    let outline: ReportOutline = serde_json::from_str(&response)
-        .map_err(|e| format!("解析大纲失败: {}", e))?;
+    // 解析 JSON（使用健壮的 JSON 提取）
+    let outline: ReportOutline = parse_json(&response, "解析大纲失败")?;
 
     emit_event(app, DeepResearchEvent::OutlineGenerated {
         outline: outline.clone(),
@@ -711,7 +875,7 @@ pub async fn generate_outline_node(
 
 /// 撰写报告节点
 /// 
-/// 基于大纲和笔记内容，生成完整报告
+/// 基于大纲和笔记内容/网络搜索结果，生成完整报告
 pub async fn write_report_node(
     app: &AppHandle,
     llm: &Arc<LlmClient>,
@@ -727,19 +891,23 @@ pub async fn write_report_node(
     let outline = state.outline.as_ref().ok_or("缺少报告大纲")?;
     
     // 构建笔记内容参考（移除 .md 后缀以便 LLM 正确生成双链）
-    let notes_content: String = state.read_notes
-        .iter()
-        .map(|n| {
-            let content_preview = n.content.chars().take(2000).collect::<String>();
-            // 移除 .md 后缀
-            let note_name = n.title.trim_end_matches(".md");
-            format!(
-                "## {}\n笔记名: {}\n\n{}\n\n---\n",
-                note_name, note_name, content_preview
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let notes_content: String = if state.read_notes.is_empty() {
+        "（无本地笔记）".to_string()
+    } else {
+        state.read_notes
+            .iter()
+            .map(|n| {
+                let content_preview = n.content.chars().take(2000).collect::<String>();
+                // 移除 .md 后缀
+                let note_name = n.title.trim_end_matches(".md");
+                format!(
+                    "## {}\n笔记名: {}\n\n{}\n\n---\n",
+                    note_name, note_name, content_preview
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
 
     // 构建网络搜索结果参考
     let web_content: String = if !state.web_search_results.is_empty() {

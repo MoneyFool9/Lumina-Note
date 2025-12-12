@@ -15,6 +15,8 @@ pub enum ResearchPhase {
     WaitingForClarification,
     /// 搜索笔记
     SearchingNotes,
+    /// 搜索网络
+    SearchingWeb,
     /// 阅读笔记
     ReadingNotes,
     /// 生成大纲
