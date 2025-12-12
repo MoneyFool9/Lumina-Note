@@ -3,7 +3,7 @@
  * 在悬浮球模式下显示的 AI 对话面板
  */
 
-import React, { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useFileStore } from "@/stores/useFileStore";
@@ -46,6 +46,7 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
   useFileStore(); // Hook for store subscription
 
   const [showSettings, setShowSettings] = useState(false);
+  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
 
   // 首次加载检查
   useEffect(() => {
@@ -107,10 +108,60 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
     };
   }, [setFloatingPanelOpen]);
 
+  // 文件拖拽进入面板时的视觉反馈
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const dragData = (window as any).__lumina_drag_data;
+      if (!dragData?.isDragging || !panelRef.current) {
+        if (isDraggingFileOver) setIsDraggingFileOver(false);
+        return;
+      }
+      
+      const rect = panelRef.current.getBoundingClientRect();
+      const isOver = e.clientX >= rect.left && e.clientX <= rect.right && 
+                     e.clientY >= rect.top && e.clientY <= rect.bottom;
+      
+      if (isOver !== isDraggingFileOver) {
+        setIsDraggingFileOver(isOver);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsDraggingFileOver(false);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingFileOver]);
+
+  // 监听文件拖拽放置，转发给 ChatInput
+  useEffect(() => {
+    const handleLuminaDrop = (e: Event) => {
+      const { filePath, fileName, x, y } = (e as CustomEvent).detail;
+      if (!filePath || !fileName || !panelRef.current) return;
+      
+      const rect = panelRef.current.getBoundingClientRect();
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+      
+      window.dispatchEvent(new CustomEvent('chat-input-file-drop', {
+        detail: { filePath, fileName }
+      }));
+    };
+    
+    window.addEventListener('lumina-drop', handleLuminaDrop);
+    return () => window.removeEventListener('lumina-drop', handleLuminaDrop);
+  }, []);
+
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 bg-background border border-border rounded-xl shadow-2xl overflow-hidden"
+      className={`fixed z-50 bg-background border border-border rounded-xl shadow-2xl overflow-hidden transition-all duration-200 ${
+        isDraggingFileOver ? "ring-2 ring-primary ring-inset bg-primary/5" : ""
+      }`}
       style={{
         left: position.x,
         top: position.y,

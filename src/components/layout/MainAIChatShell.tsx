@@ -372,6 +372,34 @@ export function MainAIChatShell() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // 监听文件拖拽事件，支持从文件树拖拽文件引用到 AI 对话框
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleLuminaDrop = (e: Event) => {
+      const { filePath, fileName, x, y } = (e as CustomEvent).detail;
+      if (!filePath || !fileName) return;
+      
+      // 检查拖拽位置是否在 AI 对话框区域内
+      const container = chatContainerRef.current;
+      if (!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+      
+      // 添加文件引用（避免重复）
+      setReferencedFiles(prev => {
+        if (prev.some(f => f.path === filePath)) return prev;
+        return [...prev, { path: filePath, name: fileName, isFolder: false }];
+      });
+      
+      // 聚焦输入框
+      textareaRef.current?.focus();
+    };
+    
+    window.addEventListener('lumina-drop', handleLuminaDrop);
+    return () => window.removeEventListener('lumina-drop', handleLuminaDrop);
+  }, []);
+
   // 检测输入是否仅仅是一个网页链接
   const isOnlyWebLink = useCallback((text: string): string | null => {
     const trimmed = text.trim();
@@ -584,7 +612,7 @@ export function MainAIChatShell() {
   };
 
   return (
-    <div className="h-full bg-background text-foreground flex flex-col overflow-hidden relative">
+    <div ref={chatContainerRef} className="h-full bg-background text-foreground flex flex-col overflow-hidden relative">
       {/* 顶部工具栏 */}
       <div className="h-10 flex items-center justify-between px-4 border-b border-border shrink-0">
         <div className="flex items-center gap-2">

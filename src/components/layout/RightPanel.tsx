@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useUIStore } from "@/stores/useUIStore";
 import { useAIStore } from "@/stores/useAIStore";
 import { useAgentStore } from "@/stores/useAgentStore";
@@ -372,6 +372,8 @@ export function RightPanel() {
   const [showSettings, setShowSettings] = useState(false);
   const [isDraggingAI, setIsDraggingAI] = useState(false);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
 
   const activeTab = activeTabIndex >= 0 ? tabs[activeTabIndex] : null;
   const isMainAIActive = activeTab?.type === "ai-chat";
@@ -441,8 +443,65 @@ export function RightPanel() {
     };
   }, [setRightPanelTab]);
 
+  // 文件拖拽进入面板时的视觉反馈
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const dragData = (window as any).__lumina_drag_data;
+      if (!dragData?.isDragging || !panelRef.current) {
+        if (isDraggingFileOver) setIsDraggingFileOver(false);
+        return;
+      }
+      
+      const rect = panelRef.current.getBoundingClientRect();
+      const isOver = e.clientX >= rect.left && e.clientX <= rect.right && 
+                     e.clientY >= rect.top && e.clientY <= rect.bottom;
+      
+      if (isOver !== isDraggingFileOver) {
+        setIsDraggingFileOver(isOver);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsDraggingFileOver(false);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingFileOver]);
+
+  // 监听文件拖拽放置，如果在面板区域内，转发给 ChatInput
+  useEffect(() => {
+    const handleLuminaDrop = (e: Event) => {
+      const { filePath, fileName, x, y } = (e as CustomEvent).detail;
+      if (!filePath || !fileName || !panelRef.current) return;
+      
+      // 检查是否在面板区域内
+      const rect = panelRef.current.getBoundingClientRect();
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+      
+      // 如果当前是 chat tab，转发事件给 ChatInput
+      if (rightPanelTab === "chat" && aiPanelMode === "docked" && !isMainAIActive) {
+        window.dispatchEvent(new CustomEvent('chat-input-file-drop', {
+          detail: { filePath, fileName }
+        }));
+      }
+    };
+    
+    window.addEventListener('lumina-drop', handleLuminaDrop);
+    return () => window.removeEventListener('lumina-drop', handleLuminaDrop);
+  }, [rightPanelTab, aiPanelMode, isMainAIActive]);
+
   return (
-    <aside className="w-full h-full bg-background border-l border-border flex flex-col transition-colors duration-300">
+    <aside 
+      ref={panelRef}
+      className={`w-full h-full bg-background border-l border-border flex flex-col transition-all duration-200 ${
+        isDraggingFileOver ? "ring-2 ring-primary ring-inset bg-primary/5" : ""
+      }`}
+    >
       {/* Tabs */}
       <div className="flex border-b border-border">
         {/* AI Tab - 只在 docked 模式且主视图未处于 AI 聊天时显示 */}

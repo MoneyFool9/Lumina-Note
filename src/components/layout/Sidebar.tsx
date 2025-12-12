@@ -977,6 +977,8 @@ function FileTreeItem({
     // 存储拖拽数据到全局
     (window as any).__lumina_drag_data = {
       wikiLink,
+      filePath: entry.path,
+      fileName: entry.name,
       startX: e.clientX,
       startY: e.clientY,
       isDragging: false,

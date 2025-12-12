@@ -73,6 +73,47 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 监听文件拖拽事件，支持从文件树拖拽文件引用
+  useEffect(() => {
+    // 添加文件引用的通用函数
+    const addFileRef = (filePath: string, fileName: string) => {
+      setReferencedFiles(prev => {
+        if (prev.some(f => f.path === filePath)) return prev;
+        return [...prev, { path: filePath, name: fileName, isFolder: false }];
+      });
+      textareaRef.current?.focus();
+    };
+    
+    // 直接拖拽到输入框区域
+    const handleLuminaDrop = (e: Event) => {
+      const { filePath, fileName, x, y } = (e as CustomEvent).detail;
+      if (!filePath || !fileName) return;
+      
+      const container = containerRef.current;
+      if (!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return;
+      
+      addFileRef(filePath, fileName);
+    };
+    
+    // 从父容器（RightPanel/AIFloatingPanel）转发的拖拽事件
+    const handlePanelFileDrop = (e: Event) => {
+      const { filePath, fileName } = (e as CustomEvent).detail;
+      if (!filePath || !fileName) return;
+      addFileRef(filePath, fileName);
+    };
+    
+    window.addEventListener('lumina-drop', handleLuminaDrop);
+    window.addEventListener('chat-input-file-drop', handlePanelFileDrop);
+    return () => {
+      window.removeEventListener('lumina-drop', handleLuminaDrop);
+      window.removeEventListener('chat-input-file-drop', handlePanelFileDrop);
+    };
+  }, []);
 
   // 处理图片粘贴
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -296,6 +337,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
 
   return (
     <div
+      ref={containerRef}
       className={cn("relative", className)}
     >
       {/* 已引用的文件、文本片段和图片标签 */}

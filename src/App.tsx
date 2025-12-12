@@ -265,16 +265,22 @@ function App() {
       if (!dragData.isDragging && Math.sqrt(dx*dx + dy*dy) > 5) {
         dragData.isDragging = true;
         
-        // 创建拖拽指示器
+        // 创建拖拽指示器 - VS Code/Cursor 风格
         dragIndicator = document.createElement('div');
-        dragIndicator.className = 'fixed pointer-events-none z-[9999] px-2 py-1 bg-primary text-primary-foreground text-sm rounded shadow-lg';
-        dragIndicator.textContent = dragData.wikiLink;
+        dragIndicator.className = 'fixed pointer-events-none z-[9999] flex items-center gap-2 px-3 py-2 bg-popover/95 backdrop-blur-sm text-popover-foreground text-sm rounded-lg border border-border shadow-xl';
+        dragIndicator.innerHTML = `
+          <svg class="w-4 h-4 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="truncate max-w-[200px]">${dragData.fileName.replace(/\.(md|db\.json)$/i, '')}</span>
+        `;
         document.body.appendChild(dragIndicator);
       }
       
       if (dragData.isDragging && dragIndicator) {
-        dragIndicator.style.left = `${e.clientX + 10}px`;
-        dragIndicator.style.top = `${e.clientY + 10}px`;
+        dragIndicator.style.left = `${e.clientX - 8}px`;
+        dragIndicator.style.top = `${e.clientY + 2}px`;
       }
     };
     
@@ -289,10 +295,12 @@ function App() {
       }
       
       if (dragData.isDragging) {
-        // 触发自定义事件，让编辑器处理
+        // 触发自定义事件，让编辑器和 AI 对话框处理
         const dropEvent = new CustomEvent('lumina-drop', {
           detail: {
             wikiLink: dragData.wikiLink,
+            filePath: dragData.filePath,
+            fileName: dragData.fileName,
             x: e.clientX,
             y: e.clientY,
           }
