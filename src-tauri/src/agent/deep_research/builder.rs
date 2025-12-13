@@ -123,7 +123,7 @@ pub fn build_deep_research_graph(ctx: DeepResearchContext) -> GraphResult<Compil
     graph.add_node("crawl_web", move |state: DeepResearchState| {
         let ctx = ctx_crawl.clone();
         let jina = ctx.jina.clone();
-        let max_pages = ctx.config.max_web_search_results.min(5); // 最多爬取 5 个网页
+        let max_pages = ctx.config.max_web_search_results.min(10); // 最多爬取 10 个网页
         async move {
             let result = crawl_web_node(&ctx.app, state, jina.as_ref(), max_pages).await
                 .map_err(|e| GraphError::ExecutionError {
