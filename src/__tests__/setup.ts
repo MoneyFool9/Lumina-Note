@@ -4,9 +4,48 @@
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
 
-// Mock Tauri API
+// Mock Tauri API - 智能 Mock，根据命令名返回模拟数据
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn((cmd: string, args?: unknown) => {
+    // 根据命令名返回模拟数据
+    const mockResponses: Record<string, unknown> = {
+      // 文件操作
+      'read_file': '# Mock Content\n\nThis is mock file content.',
+      'save_file': undefined,
+      'list_files': ['note1.md', 'note2.md', 'folder/note3.md'],
+      'file_exists': true,
+      'create_directory': undefined,
+      'delete_file': undefined,
+      'rename_file': undefined,
+      'move_file': undefined,
+      
+      // Agent 相关
+      'agent_start_task': { taskId: 'mock-task-id' },
+      'agent_abort': undefined,
+      'agent_get_status': { status: 'idle' },
+      
+      // RAG 相关
+      'search_notes': [],
+      'semantic_search': [],
+      'get_embeddings': [[0.1, 0.2, 0.3]],
+      
+      // 数据库相关
+      'query_database': { rows: [] },
+      
+      // 系统信息
+      'get_workspace_path': '/mock/workspace',
+      'get_debug_log_path': '/mock/logs',
+    };
+
+    const response = mockResponses[cmd];
+    if (response !== undefined) {
+      return Promise.resolve(response);
+    }
+    
+    // 默认返回 null
+    console.log(`[Mock invoke] 未处理的命令: ${cmd}`, args);
+    return Promise.resolve(null);
+  }),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
