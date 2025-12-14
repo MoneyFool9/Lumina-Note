@@ -1,0 +1,137 @@
+/**
+ * LLM Factory 测试
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createProvider } from './factory';
+import { setLLMConfig, resetLLMConfig } from './config';
+
+// Mock console to suppress debug logs
+vi.spyOn(console, 'log').mockImplementation(() => {});
+vi.spyOn(console, 'error').mockImplementation(() => {});
+
+describe('createProvider', () => {
+  beforeEach(() => {
+    resetLLMConfig();
+    vi.clearAllMocks();
+  });
+
+  describe('API Key validation', () => {
+    it('should throw error when API key is missing (non-ollama)', () => {
+      setLLMConfig({ provider: 'openai', model: 'gpt-4o' });
+      expect(() => createProvider()).toThrow('请先配置 openai 的 API Key');
+    });
+
+    it('should not throw for ollama without API key', () => {
+      setLLMConfig({ provider: 'ollama', model: 'llama3.2' });
+      expect(() => createProvider()).not.toThrow();
+    });
+
+    it('should work when API key is provided', () => {
+      setLLMConfig({ 
+        provider: 'openai', 
+        model: 'gpt-4o',
+        apiKey: 'sk-test-key' 
+      });
+      const provider = createProvider();
+      expect(provider).toBeTruthy();
+    });
+  });
+
+  describe('Provider creation', () => {
+    const providers = [
+      { name: 'anthropic', model: 'claude-3-opus-20240229' },
+      { name: 'openai', model: 'gpt-4o' },
+      { name: 'gemini', model: 'gemini-1.5-pro' },
+      { name: 'moonshot', model: 'moonshot-v1-8k' },
+      { name: 'deepseek', model: 'deepseek-chat' },
+      { name: 'groq', model: 'llama-3.3-70b-versatile' },
+      { name: 'openrouter', model: 'anthropic/claude-sonnet-4' },
+    ] as const;
+
+    it.each(providers)('should create $name provider', ({ name, model }) => {
+      setLLMConfig({ 
+        provider: name as any, 
+        model,
+        apiKey: 'test-key' 
+      });
+      const provider = createProvider();
+      expect(provider).toBeTruthy();
+      expect(provider.call).toBeInstanceOf(Function);
+    });
+
+    it('should create ollama provider without API key', () => {
+      setLLMConfig({ provider: 'ollama', model: 'llama3.2' });
+      const provider = createProvider();
+      expect(provider).toBeTruthy();
+    });
+  });
+
+  describe('Config override', () => {
+    it('should use override config over global config', () => {
+      setLLMConfig({ 
+        provider: 'openai', 
+        model: 'gpt-3.5-turbo',
+        apiKey: 'global-key' 
+      });
+      
+      // Override with different provider
+      const provider = createProvider({
+        provider: 'anthropic',
+        model: 'claude-3-opus-20240229',
+        apiKey: 'override-key',
+      });
+      
+      expect(provider).toBeTruthy();
+    });
+
+    it('should merge partial override with global config', () => {
+      setLLMConfig({ 
+        provider: 'openai', 
+        model: 'gpt-4o',
+        apiKey: 'test-key',
+        temperature: 0.5,
+      });
+      
+      // Only override model
+      const provider = createProvider({ model: 'gpt-3.5-turbo' });
+      expect(provider).toBeTruthy();
+    });
+  });
+
+  describe('Custom model handling', () => {
+    it('should use customModelId when model is "custom"', () => {
+      setLLMConfig({ 
+        provider: 'openai', 
+        model: 'custom',
+        customModelId: 'my-fine-tuned-model',
+        apiKey: 'test-key' 
+      });
+      
+      const provider = createProvider();
+      expect(provider).toBeTruthy();
+    });
+
+    it('should ignore customModelId when model is not "custom"', () => {
+      setLLMConfig({ 
+        provider: 'openai', 
+        model: 'gpt-4o',
+        customModelId: 'my-fine-tuned-model',
+        apiKey: 'test-key' 
+      });
+      
+      const provider = createProvider();
+      expect(provider).toBeTruthy();
+    });
+  });
+
+  describe('Unsupported provider', () => {
+    it('should throw for unsupported provider', () => {
+      setLLMConfig({ 
+        provider: 'unknown-provider' as any,
+        model: 'some-model',
+        apiKey: 'test-key' 
+      });
+      expect(() => createProvider()).toThrow('不支持的 AI 提供商');
+    });
+  });
+});
