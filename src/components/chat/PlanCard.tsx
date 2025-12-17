@@ -1,5 +1,5 @@
 /**
- * 任务计划卡片组件
+ * 任务计划卡片组件 (Windsurf 风格)
  * 
  * 显示 Agent 的执行计划和进度
  */
@@ -7,32 +7,27 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, Circle, Loader2, ListTodo, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import type { Plan, AgentType } from "@/stores/useRustAgentStore";
+import type { Plan, PlanStepStatus } from "@/stores/useRustAgentStore";
 
 interface PlanCardProps {
   plan: Plan;
   className?: string;
 }
 
-// Agent 类型对应的图标和颜色
-const agentConfig: Record<AgentType, { label: string; color: string }> = {
-  coordinator: { label: "协调", color: "text-purple-500" },
-  planner: { label: "规划", color: "text-blue-500" },
-  executor: { label: "执行", color: "text-orange-500" },
-  editor: { label: "编辑", color: "text-green-500" },
-  researcher: { label: "研究", color: "text-cyan-500" },
-  writer: { label: "写作", color: "text-pink-500" },
-  organizer: { label: "整理", color: "text-yellow-500" },
-  reporter: { label: "汇报", color: "text-gray-500" },
+// 状态对应的样式
+const statusConfig: Record<PlanStepStatus, { icon: "completed" | "in_progress" | "pending"; textClass: string }> = {
+  completed: { icon: "completed", textClass: "text-muted-foreground line-through" },
+  in_progress: { icon: "in_progress", textClass: "text-foreground font-medium" },
+  pending: { icon: "pending", textClass: "text-muted-foreground/70" },
 };
 
 export function PlanCard({ plan, className = "" }: PlanCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
-  const completedCount = plan.steps.filter(s => s.completed).length;
+  const completedCount = plan.steps.filter(s => s.status === "completed").length;
   const totalCount = plan.steps.length;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-  const isAllCompleted = completedCount === totalCount;
+  const isAllCompleted = completedCount === totalCount && totalCount > 0;
 
   return (
     <motion.div
@@ -51,7 +46,7 @@ export function PlanCard({ plan, className = "" }: PlanCardProps) {
             执行计划
           </span>
           <span className="text-xs text-muted-foreground">
-            ({completedCount}/{totalCount} 完成)
+            ({completedCount}/{totalCount})
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -82,30 +77,30 @@ export function PlanCard({ plan, className = "" }: PlanCardProps) {
             transition={{ duration: 0.2 }}
             className="border-t border-border"
           >
+            {/* 说明（如果有） */}
+            {plan.explanation && (
+              <div className="px-3 py-1.5 text-xs text-muted-foreground border-b border-border/50">
+                {plan.explanation}
+              </div>
+            )}
+            
             <div className="px-3 py-2 space-y-1.5">
               {plan.steps.map((step, index) => {
-                const isCurrent = index === plan.current_step && !step.completed;
-                const config = agentConfig[step.agent] || agentConfig.executor;
+                const config = statusConfig[step.status];
                 
                 return (
                   <motion.div
-                    key={step.id}
+                    key={index}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className={`flex items-start gap-2 text-sm ${
-                      step.completed 
-                        ? "text-muted-foreground" 
-                        : isCurrent 
-                          ? "text-foreground" 
-                          : "text-muted-foreground/70"
-                    }`}
+                    className={`flex items-start gap-2 text-sm ${config.textClass}`}
                   >
                     {/* 状态图标 */}
                     <div className="mt-0.5 flex-shrink-0">
-                      {step.completed ? (
+                      {step.status === "completed" ? (
                         <CheckCircle2 className="w-4 h-4 text-green-500" />
-                      ) : isCurrent ? (
+                      ) : step.status === "in_progress" ? (
                         <Loader2 className="w-4 h-4 text-primary animate-spin" />
                       ) : (
                         <Circle className="w-4 h-4 text-muted-foreground/50" />
@@ -114,14 +109,8 @@ export function PlanCard({ plan, className = "" }: PlanCardProps) {
                     
                     {/* 步骤内容 */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${config.color} bg-current/10`}>
-                          {config.label}
-                        </span>
-                        <span className={step.completed ? "line-through" : ""}>
-                          {step.description}
-                        </span>
-                      </div>
+                      <span className="text-xs text-muted-foreground mr-1.5">{index + 1}.</span>
+                      <span>{step.step}</span>
                     </div>
                   </motion.div>
                 );

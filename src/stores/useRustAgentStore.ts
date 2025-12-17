@@ -52,14 +52,16 @@ export interface RustAgentSession {
   totalTokensUsed: number;
 }
 
+// Plan 步骤状态 (Windsurf 风格)
+export type PlanStepStatus = "pending" | "in_progress" | "completed";
+
+// Plan 结构 (Windsurf 风格)
 export interface Plan {
   steps: {
-    id: string;
-    description: string;
-    agent: AgentType;
-    completed: boolean;
+    step: string;
+    status: PlanStepStatus;
   }[];
-  current_step: number;
+  explanation?: string;
 }
 
 export interface TaskContext {
@@ -566,44 +568,11 @@ export const useRustAgentStore = create<RustAgentState>()(
             break;
           }
 
-          case "plan_created": {
+          case "plan_updated": {
+            // Windsurf 风格：每次接收完整的 plan
             const { plan } = event.data as { plan: Plan };
+            console.log("[RustAgent] plan_updated:", plan);
             set({ currentPlan: plan });
-            break;
-          }
-
-          case "step_started": {
-            const { index } = event.data as { step: Plan["steps"][0]; index: number };
-            // 更新 current_step
-            const currentPlan = get().currentPlan;
-            if (currentPlan) {
-              set({
-                currentPlan: {
-                  ...currentPlan,
-                  current_step: index,
-                },
-              });
-            }
-            break;
-          }
-
-          case "step_completed": {
-            const { index } = event.data as { step: Plan["steps"][0]; index: number };
-            console.log("[RustAgent] step_completed event received:", { index, event: event.data });
-            // 标记步骤为已完成
-            const currentPlan = get().currentPlan;
-            console.log("[RustAgent] currentPlan before update:", currentPlan);
-            if (currentPlan && index < currentPlan.steps.length) {
-              const updatedSteps = [...currentPlan.steps];
-              updatedSteps[index] = { ...updatedSteps[index], completed: true };
-              set({
-                currentPlan: {
-                  ...currentPlan,
-                  steps: updatedSteps,
-                  current_step: index + 1,
-                },
-              });
-            }
             break;
           }
 
