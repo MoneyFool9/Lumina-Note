@@ -21,6 +21,7 @@ pub async fn coordinator_node(
     mut state: GraphState,
 ) -> Result<NodeResult, String> {
     use crate::agent::debug_log as dbg;
+    use crate::agent::workspace_layout::{generate_workspace_layout, WorkspaceLayoutConfig};
     
     dbg::log_separator("协调器节点 (Coordinator)");
     
@@ -28,7 +29,26 @@ pub async fn coordinator_node(
         status: AgentStatus::Running,
     });
 
-    // 构建系统提示
+    // 生成工作区目录结构（如果尚未生成）
+    // 类似 Windsurf 的 workspace_layout，在会话开始时注入
+    let workspace_layout = if let Some(ref existing) = state.file_tree {
+        existing.clone()
+    } else {
+        let config = WorkspaceLayoutConfig::default();
+        match generate_workspace_layout(&state.workspace_path, &config).await {
+            Ok(layout) => {
+                // 缓存到 state，供后续节点复用
+                state.file_tree = Some(layout.clone());
+                layout
+            }
+            Err(e) => {
+                dbg::log_error(&format!("Failed to generate workspace layout: {}", e));
+                "(无法读取目录结构)".to_string()
+            }
+        }
+    };
+
+    // 构建系统提示 - 现在包含目录结构上下文
     let system_prompt = format!(
         r#"你是 Lumina，一个智能笔记助手。分析用户的请求，判断任务类型。
 
@@ -43,11 +63,15 @@ pub async fn coordinator_node(
 当前工作区：{}
 当前笔记：{}
 
+以下是笔记库的目录结构：
+{}
+
 请用 JSON 格式回复：
 {{"intent": "chat|edit|create|organize|search|complex", "reason": "判断理由"}}
 "#,
         state.workspace_path,
-        state.active_note_path.as_deref().unwrap_or("无")
+        state.active_note_path.as_deref().unwrap_or("无"),
+        workspace_layout
     );
 
     // 构建消息
@@ -304,40 +328,45 @@ async fn agent_worker_node(
     // ========== 使用 ChatChunks 分层构建消息 ==========
     
     // 1. 构建系统提示（身份 + 规则 + 基础格式提醒）
-    // 根据 provider 是否支持 FC 决定是否包含 XML 格式教学
+    // 包含 workspace_layout（由 coordinator 生成并缓存在 state.file_tree 中）
     let supports_fc = llm.supports_fc();
-    let base_system = build_agent_prompt(agent_name, &state.workspace_path, "", supports_fc);
+    let workspace_context = state.file_tree.as_deref().unwrap_or("(无目录结构)");
+    let base_system = build_agent_prompt(agent_name, &state.workspace_path, workspace_context, supports_fc);
     let system_prompt = format!("{}\n{}", base_system, FORMAT_REMINDER);
     
     let mut chunks = ChatChunks::new(system_prompt);
     
-    // 2. 生成 Note Map（笔记库结构摘要）
-    let current_notes: Vec<String> = state.active_note_path
-        .as_ref()
-        .map(|p| vec![p.clone()])
-        .unwrap_or_default();
-    
-    // 从用户消息和历史中提取提到的笔记
-    let mut mentioned_notes = extract_mentioned_notes(&state.user_task);
-    for msg in &state.messages {
-        mentioned_notes.extend(extract_mentioned_notes(&msg.content));
-    }
-    
-    let note_map_config = NoteMapConfig {
-        max_tokens: 1024,
-        show_word_count: true,
-        max_heading_depth: 3,
-    };
-    
-    // 生成 Note Map（异步操作）
-    if let Ok(note_map) = generate_note_map(
-        &state.workspace_path,
-        &current_notes,
-        &mentioned_notes,
-        &note_map_config,
-    ).await {
-        if !note_map.is_empty() && note_map != "(笔记库为空)" {
-            chunks = chunks.with_note_map(note_map);
+    // 2. Note Map（按需生成）
+    // 只有 editor 节点需要详细的标题大纲（用于精确定位章节）
+    // 其他节点使用工具（read_outline）按需获取
+    if agent_name == "editor" {
+        let current_notes: Vec<String> = state.active_note_path
+            .as_ref()
+            .map(|p| vec![p.clone()])
+            .unwrap_or_default();
+        
+        // 从用户消息和历史中提取提到的笔记
+        let mut mentioned_notes = extract_mentioned_notes(&state.user_task);
+        for msg in &state.messages {
+            mentioned_notes.extend(extract_mentioned_notes(&msg.content));
+        }
+        
+        let note_map_config = NoteMapConfig {
+            max_tokens: 1024,
+            show_word_count: true,
+            max_heading_depth: 3,
+        };
+        
+        // 生成 Note Map（异步操作）
+        if let Ok(note_map) = generate_note_map(
+            &state.workspace_path,
+            &current_notes,
+            &mentioned_notes,
+            &note_map_config,
+        ).await {
+            if !note_map.is_empty() && note_map != "(笔记库为空)" {
+                chunks = chunks.with_note_map(note_map);
+            }
         }
     }
     
