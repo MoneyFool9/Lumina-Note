@@ -3,7 +3,7 @@
  * 用于运行和查看 Agent 评估结果
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAgentEvalStore } from './useAgentEvalStore';
 import { allTestCases } from './testCases';
 import { 
@@ -18,6 +18,8 @@ import {
   ChevronRight,
   FileText,
   AlertCircle,
+  History,
+  Save,
 } from 'lucide-react';
 
 export function AgentEvalPanel() {
@@ -28,14 +30,29 @@ export function AgentEvalPanel() {
     results,
     summary,
     selectedCategories,
+    experimentName,
+    experimentDescription,
+    history,
+    currentReport,
     runAllTests,
     stopTests,
     clearResults,
     setSelectedCategories,
+    setExperimentName,
+    setExperimentDescription,
+    loadHistory,
+    deleteReport,
+    exportDetailedReport,
   } = useAgentEvalStore();
 
-  const [workspacePath, setWorkspacePath] = useState('');
+  const [workspacePath, setWorkspacePath] = useState('D:\\Desktop\\Lumina Note\\tests\\agent-eval\\fixtures\\test-vault');
   const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
+  const [showHistory, setShowHistory] = useState(false);
+
+  // 加载历史记录
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const toggleExpanded = (testId: string) => {
     const newExpanded = new Set(expandedResults);
@@ -77,14 +94,39 @@ export function AgentEvalPanel() {
         
         {/* 配置 */}
         <div className="space-y-3">
-          {/* 笔记库路径 */}
+          {/* 实验配置 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-muted-foreground">实验名称</label>
+              <input
+                type="text"
+                value={experimentName}
+                onChange={(e) => setExperimentName(e.target.value)}
+                placeholder="例如: GPT-4o 基准测试"
+                className="w-full mt-1 px-3 py-2 bg-muted rounded border border-border"
+                disabled={isRunning}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground">测试笔记库路径</label>
+              <input
+                type="text"
+                value={workspacePath}
+                onChange={(e) => setWorkspacePath(e.target.value)}
+                placeholder="例如: D:\test-vault"
+                className="w-full mt-1 px-3 py-2 bg-muted rounded border border-border"
+                disabled={isRunning}
+              />
+            </div>
+          </div>
+          
           <div>
-            <label className="text-sm text-muted-foreground">测试笔记库路径</label>
+            <label className="text-sm text-muted-foreground">实验描述（可选）</label>
             <input
               type="text"
-              value={workspacePath}
-              onChange={(e) => setWorkspacePath(e.target.value)}
-              placeholder="例如: D:\test-vault"
+              value={experimentDescription}
+              onChange={(e) => setExperimentDescription(e.target.value)}
+              placeholder="例如: 测试新的计划策略"
               className="w-full mt-1 px-3 py-2 bg-muted rounded border border-border"
               disabled={isRunning}
             />
@@ -109,6 +151,12 @@ export function AgentEvalPanel() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 评估方式说明 */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>🤖</span>
+            <span>使用 LLM 评估（每个测试独立，无历史污染）</span>
           </div>
 
           {/* 控制按钮 */}
@@ -139,6 +187,32 @@ export function AgentEvalPanel() {
             >
               <Trash2 size={16} />
               清除结果
+            </button>
+            
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`flex items-center gap-2 px-4 py-2 rounded ${
+                showHistory ? 'bg-primary text-primary-foreground' : 'bg-muted'
+              }`}
+            >
+              <History size={16} />
+              历史记录 ({history.length})
+            </button>
+            
+            <button
+              onClick={async () => {
+                try {
+                  const path = await exportDetailedReport(workspacePath);
+                  alert(`报告已导出: ${path}`);
+                } catch (e) {
+                  alert(`导出失败: ${e}`);
+                }
+              }}
+              disabled={isRunning || results.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Save size={16} />
+              导出报告
             </button>
           </div>
         </div>
@@ -293,29 +367,88 @@ export function AgentEvalPanel() {
                     ))}
                   </div>
 
-                  {/* 工具调用 */}
+                  {/* 执行计划 */}
+                  {result.agentResult.plan && result.agentResult.plan.steps.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-muted-foreground mb-1 font-medium">📋 执行计划：</div>
+                      <div className="bg-muted/30 rounded p-2 space-y-1">
+                        {result.agentResult.plan.steps.map((step, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className={step.completed ? 'text-green-500' : 'text-muted-foreground'}>
+                              {step.completed ? '✅' : '⬜'}
+                            </span>
+                            <span className={step.completed ? '' : 'text-muted-foreground'}>
+                              {step.description}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 工具调用详情 */}
                   {result.agentResult.toolsCalled.length > 0 && (
-                    <div>
-                      <span className="text-muted-foreground">工具调用：</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="mt-2">
+                      <div className="text-muted-foreground mb-1 font-medium">🔧 工具调用：</div>
+                      <div className="space-y-2">
                         {result.agentResult.toolsCalled.map((tool, i) => (
-                          <span 
+                          <div 
                             key={i}
-                            className={`px-2 py-0.5 rounded text-xs ${
-                              tool.success ? 'bg-green-500/20' : 'bg-red-500/20'
+                            className={`bg-muted/30 rounded p-2 border-l-2 ${
+                              tool.success ? 'border-green-500' : 'border-red-500'
                             }`}
                           >
-                            {tool.name}
-                          </span>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`font-mono font-medium ${
+                                tool.success ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {tool.name}
+                              </span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                tool.success ? 'bg-green-500/20 text-green-600' : 'bg-red-500/20 text-red-600'
+                              }`}>
+                                {tool.success ? '成功' : '失败'}
+                              </span>
+                            </div>
+                            {tool.params && Object.keys(tool.params).length > 0 && (
+                              <div className="text-xs text-muted-foreground mb-1">
+                                <span className="font-medium">参数：</span>
+                                <code className="ml-1 bg-muted px-1 rounded">
+                                  {JSON.stringify(tool.params).slice(0, 100)}
+                                  {JSON.stringify(tool.params).length > 100 ? '...' : ''}
+                                </code>
+                              </div>
+                            )}
+                            {tool.output && (
+                              <div className="text-xs mt-1">
+                                <span className="font-medium text-muted-foreground">输出：</span>
+                                <pre className="mt-1 bg-muted p-2 rounded overflow-auto max-h-24 text-xs">
+                                  {typeof tool.output === 'string' 
+                                    ? tool.output.slice(0, 300) + (tool.output.length > 300 ? '...' : '')
+                                    : JSON.stringify(tool.output, null, 2).slice(0, 300)}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Agent 回复 */}
+                  {result.agentResult.actualOutput && (
+                    <div className="mt-2">
+                      <div className="text-muted-foreground mb-1 font-medium">💬 Agent 回复：</div>
+                      <div className="bg-muted/30 rounded p-3 whitespace-pre-wrap text-sm max-h-48 overflow-auto">
+                        {result.agentResult.actualOutput}
                       </div>
                     </div>
                   )}
 
                   {/* 错误 */}
                   {result.error && (
-                    <div className="text-red-500">
-                      错误：{result.error}
+                    <div className="mt-2 p-2 bg-red-500/10 border border-red-500/30 rounded text-red-500">
+                      ❌ 错误：{result.error}
                     </div>
                   )}
                 </div>
@@ -324,6 +457,68 @@ export function AgentEvalPanel() {
           ))}
         </div>
       </div>
+
+      {/* 历史记录面板 */}
+      {showHistory && (
+        <div className="absolute right-0 top-0 h-full w-80 bg-background border-l border-border shadow-lg overflow-auto">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h2 className="font-semibold">📜 实验历史</h2>
+            <button onClick={() => setShowHistory(false)} className="text-muted-foreground hover:text-foreground">
+              ✕
+            </button>
+          </div>
+          
+          {history.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground">
+              暂无历史记录
+            </div>
+          ) : (
+            <div className="p-2 space-y-2">
+              {history.map(item => (
+                <div 
+                  key={item.experimentId}
+                  className="p-3 bg-muted/50 rounded border border-border hover:bg-muted"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium truncate">{item.experimentName}</span>
+                    <button
+                      onClick={() => deleteReport(item.experimentId)}
+                      className="text-red-500 hover:text-red-600 text-xs"
+                    >
+                      删除
+                    </button>
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    {new Date(item.createdAt).toLocaleString()}
+                  </div>
+                  <div className="flex gap-2 text-xs">
+                    <span className="px-2 py-0.5 bg-blue-500/20 rounded">
+                      {item.modelId}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded ${
+                      item.passRate >= 0.8 ? 'bg-green-500/20' : 
+                      item.passRate >= 0.6 ? 'bg-yellow-500/20' : 'bg-red-500/20'
+                    }`}>
+                      {(item.passRate * 100).toFixed(0)}% 通过
+                    </span>
+                    <span className="px-2 py-0.5 bg-muted rounded">
+                      {item.totalTests} 测试
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 当前实验已保存提示 */}
+      {currentReport && !isRunning && (
+        <div className="absolute bottom-4 right-4 px-4 py-2 bg-green-500/20 border border-green-500/50 rounded flex items-center gap-2">
+          <Save size={16} className="text-green-500" />
+          <span className="text-sm">实验已保存: {currentReport.config.experimentId}</span>
+        </div>
+      )}
     </div>
   );
 }
