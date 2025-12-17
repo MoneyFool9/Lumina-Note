@@ -2,7 +2,12 @@
  * 主题配置测试
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { OFFICIAL_THEMES, getThemeById, applyTheme, Theme, ThemeColors } from './themes';
+import { OFFICIAL_THEMES, getThemeById, applyTheme } from './themes';
+import type { Theme, ThemeColors } from './themes';
+
+// 保留类型引用以确保类型正确
+void (0 as unknown as Theme);
+void (0 as unknown as ThemeColors);
 
 // Mock document
 const mockSetProperty = vi.fn();

@@ -40,8 +40,8 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
   } = useAIStore();
   // 根据开关选择 Agent store
   const legacyAgentStore = useAgentStore();
-  const _rustAgentStore = useRustAgentStore(); // 保留引用，由 AgentPanel/ConversationList 使用
-  const USE_RUST_AGENT = true;
+  // useRustAgentStore 由 AgentPanel/ConversationList 使用
+  void useRustAgentStore();
   const checkAgentFirstLoad = legacyAgentStore.checkFirstLoad; // Rust Agent 暂不需要
   useFileStore(); // Hook for store subscription
 

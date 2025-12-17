@@ -18,7 +18,7 @@ import {
 import type { SM2State } from '@/types/flashcard';
 
 // Mock current date for consistent testing
-const MOCK_TODAY = '2024-01-15';
+// const MOCK_TODAY = '2024-01-15'; // TODO: 用于未来的日期相关测试
 
 describe('SM-2 Algorithm Constants', () => {
   it('should have correct default ease factor', () => {
