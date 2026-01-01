@@ -1131,8 +1131,8 @@ export function MainAIChatShell() {
                       <Settings size={14} />
                     </button>
                     
-                    {/* 调试模式按钮：仅在 Agent 模式下显示 */}
-                    {chatMode === "agent" && USE_RUST_AGENT && (
+                    {/* 调试模式按钮：仅在 Agent 模式下显示（开发模式） */}
+                    {import.meta.env.DEV && chatMode === "agent" && USE_RUST_AGENT && (
                       <button
                         onClick={() => {
                           if (debugEnabled) {
@@ -1252,17 +1252,19 @@ export function MainAIChatShell() {
           </AnimatePresence>
         </main>
 
-        {/* 调试按钮 */}
-        <button
-          onClick={() => setShowDebug(!showDebug)}
-          className="fixed bottom-4 right-4 z-50 w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg hover:bg-orange-600 transition-colors text-xs font-bold"
-          title={t.ai.debugPanel}
-        >
-          🐛
-        </button>
+        {/* 调试按钮（开发模式） */}
+        {import.meta.env.DEV && (
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="fixed bottom-4 right-4 z-50 w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg hover:bg-orange-600 transition-colors text-xs font-bold"
+            title={t.ai.debugPanel}
+          >
+            🐛
+          </button>
+        )}
 
-        {/* 调试面板 */}
-        {showDebug && (() => {
+        {/* 调试面板（开发模式） */}
+        {import.meta.env.DEV && showDebug && (() => {
           // 获取完整消息（包含 system prompt）
           // 根据是否使用 Rust Agent 选择数据源
           const fullMessages = USE_RUST_AGENT 

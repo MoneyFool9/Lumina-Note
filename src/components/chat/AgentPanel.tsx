@@ -104,8 +104,8 @@ export function AgentPanel() {
           <span className="font-medium text-foreground">Lumina Agent</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* 调试模式按钮 */}
-          {USE_RUST_AGENT && (
+          {/* 调试模式按钮（开发模式） */}
+          {import.meta.env.DEV && USE_RUST_AGENT && (
             <>
               <button
                 onClick={() => {
