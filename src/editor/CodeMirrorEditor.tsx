@@ -317,6 +317,7 @@ class CodeBlockWidget extends WidgetType {
   toDOM() {
     const c = document.createElement("div");
     c.className = "cm-code-block-widget relative group rounded-md overflow-hidden border my-2";
+    c.dataset.widgetType = "codeblock";
     c.innerHTML = `<pre class="p-3 m-0 bg-muted/50 overflow-auto text-sm"><code class="hljs font-mono ${this.language ? 'language-'+this.language : ''}"></code></pre>`;
     const codeEl = c.querySelector("code")!;
     if (this.language && lowlight.registered(this.language)) {
@@ -1204,8 +1205,8 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorRef, CodeMirrorEditor
           return;
         }
 
-        // 1. Math/Table Widget 点击 -> 聚焦源码
-        const widgetDom = target.closest('[data-widget-type="math"], [data-widget-type="table"]');
+        // 1. Math/Table/CodeBlock Widget 点击 -> 聚焦源码
+        const widgetDom = target.closest('[data-widget-type="math"], [data-widget-type="table"], [data-widget-type="codeblock"]');
         if (widgetDom) {
            const pos = v.posAtDOM(widgetDom);
            if (pos !== null) {
