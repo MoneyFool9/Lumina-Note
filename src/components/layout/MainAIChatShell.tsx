@@ -189,7 +189,8 @@ export function MainAIChatShell() {
   const checkChatFirstLoad = useAIStore((state) => state.checkFirstLoad);
   const config = useAIStore((state) => state.config);
   const chatTotalTokens = useAIStore((state) => state.totalTokensUsed);
-  const agentTotalTokens = useRustAgentStore((state) => {
+  // agentTotalTokens 暂时未使用，保留以备后续功能
+  const _agentTotalTokens = useRustAgentStore((state) => {
     const session = state.sessions.find((s) => s.id === state.currentSessionId);
     return session?.totalTokensUsed ?? 0;
   });
@@ -753,11 +754,7 @@ export function MainAIChatShell() {
                     messages={agentMessages}
                     isRunning={agentStatus === "running"}
                     llmRequestStartTime={llmRequestStartTime}
-                    onRetryTimeout={() => retryTimeout({
-                      workspacePath: vaultPath || "",
-                      activeNote: currentFile || undefined,
-                      activeNoteContent: currentFile ? currentContent : undefined,
-                    })}
+                    onRetryTimeout={retryTimeout}
                   />
                 ) : (
                   /* Chat 模式：原有的消息渲染 */
@@ -1235,7 +1232,7 @@ export function MainAIChatShell() {
                             <div className="flex gap-2">
                               <span className="text-muted-foreground w-16 shrink-0">Route:</span>
                               <span className="text-foreground/80">
-                                {'route' in displayIntent ? displayIntent.route : ('reasoning' in displayIntent ? displayIntent.reasoning : '-')}
+                                {'route' in displayIntent ? displayIntent.route : '-'}
                               </span>
                             </div>
                           </div>

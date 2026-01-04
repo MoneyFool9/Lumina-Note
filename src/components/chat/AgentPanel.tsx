@@ -167,11 +167,7 @@ export function AgentPanel() {
           messages={messages}
           isRunning={status === "running"}
           llmRequestStartTime={llmRequestStartTime}
-          onRetryTimeout={() => retryTimeout({
-            workspacePath: vaultPath || "",
-            activeNote: currentFile || undefined,
-            activeNoteContent: currentFile ? currentContent : undefined,
-          })}
+          onRetryTimeout={retryTimeout}
         />
 
         {/* 流式输出 */}
