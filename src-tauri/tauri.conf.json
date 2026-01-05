@@ -5,7 +5,12 @@
   "identifier": "com.luminanote.app",
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi", "dmg"],
+    "createUpdaterArtifacts": true,
+    "targets": [
+      "nsis",
+      "msi",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -39,13 +44,21 @@
       "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: asset: https://asset.localhost; img-src * data: blob: asset: https://asset.localhost; media-src * data: blob:; frame-src *; connect-src * data: blob:;",
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },
   "plugins": {
     "fs": {
       "requireLiteralLeadingDot": false
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhEMjM3RTZEQjhEREMxNjAKUldSZ3dkMjRiWDRqamE2QS9NM293cGdWaDhRbWdNcFBQd0FOaG5IVmZNeFBnMmVsd2dYeW1lOTIK",
+      "endpoints": [
+        "https://github.com/blueberrycongee/Lumina-Note/releases/latest/download/latest.json"
+      ]
     }
   }
 }
