@@ -6,7 +6,7 @@ import { Loader2, RefreshCw, Download, RotateCcw, CheckCircle2, AlertCircle } fr
 export function UpdateChecker() {
     const [checking, setChecking] = useState(false);
     const [update, setUpdate] = useState<Update | null>(null);
-    const [status, setStatus] = useState<"idle" | "downloading" | "installing" | "ready" | "error">("idle");
+    const [status, setStatus] = useState<"idle" | "downloading" | "installing" | "ready" | "error" | "up-to-date">("idle");
     const [error, setError] = useState<string | null>(null);
     const [progress, setProgress] = useState<number>(0);
     const [downloadedSize, setDownloadedSize] = useState<string>("");
@@ -26,6 +26,7 @@ export function UpdateChecker() {
                 setUpdate(updateResult);
             } else {
                 setUpdate(null);
+                setStatus("up-to-date");
             }
         } catch (err) {
             console.error("Failed to check for updates:", err);
@@ -94,6 +95,7 @@ export function UpdateChecker() {
                     <h3 className="font-medium">软件更新</h3>
                     <p className="text-sm text-muted-foreground">
                         {status === "idle" && !update && "检查新版本"}
+                        {status === "up-to-date" && "当前已是最新版本"}
                         {status === "idle" && update && `发现新版本 v${update.version}`}
                         {status === "downloading" && "正在下载更新..."}
                         {status === "installing" && "正在安装..."}
@@ -103,7 +105,7 @@ export function UpdateChecker() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {status === "idle" && !update && (
+                    {(status === "idle" || status === "up-to-date") && !update && (
                         <button
                             onClick={checkForUpdates}
                             disabled={checking}
