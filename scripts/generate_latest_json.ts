@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Script to generate latest.json for Tauri v2 updater.
-// Supports macOS (aarch64 and x86_64).
+// Supports macOS (aarch64, x86_64) and Windows (x64).
 
 interface PlatformInfo {
     signature: string;
@@ -26,14 +26,34 @@ function getVersion(): string {
 
 function getSignature(platform: string, arch: string): string {
     const version = getVersion();
-    const archSuffix = arch === 'aarch64' ? 'aarch64' : 'x64';
-    const sigPath = path.resolve(process.cwd(), 'src-tauri', 'target', 'release', 'bundle', 'macos', `lumina-note_${version}_${archSuffix}.app.tar.gz.sig`);
+    let sigPath = '';
 
-    if (fs.existsSync(sigPath)) {
+    if (platform === 'darwin') {
+        const archSuffix = arch === 'aarch64' ? 'aarch64' : 'x64';
+        sigPath = path.resolve(process.cwd(), 'src-tauri', 'target', 'release', 'bundle', 'macos', `lumina-note_${version}_${archSuffix}.app.tar.gz.sig`);
+    } else if (platform === 'windows') {
+        // Tauri v2 Windows updater typically uses .nsis.zip or .msi.zip
+        // We'll check for both, prioritizing nsis as it's more common for updates
+        const nsisPath = path.resolve(process.cwd(), 'src-tauri', 'target', 'release', 'bundle', 'nsis', `lumina-note_${version}_x64-setup.nsis.zip.sig`);
+        const msiPath = path.resolve(process.cwd(), 'src-tauri', 'target', 'release', 'bundle', 'msi', `lumina-note_${version}_x64_en-US.msi.zip.sig`);
+        sigPath = fs.existsSync(nsisPath) ? nsisPath : msiPath;
+    }
+
+    if (sigPath && fs.existsSync(sigPath)) {
         return fs.readFileSync(sigPath, 'utf-8').trim();
     }
 
-    console.warn(`Signature not found at ${sigPath}`);
+    // Fallback: check current directory (useful for CI when artifacts are collected)
+    const fallbackName = platform === 'darwin'
+        ? `lumina-note_${version}_${arch === 'aarch64' ? 'aarch64' : 'x64'}.app.tar.gz.sig`
+        : `lumina-note_${version}_x64-setup.nsis.zip.sig`;
+
+    const fallbackPath = path.resolve(process.cwd(), fallbackName);
+    if (fs.existsSync(fallbackPath)) {
+        return fs.readFileSync(fallbackPath, 'utf-8').trim();
+    }
+
+    console.warn(`Signature not found for ${platform}-${arch}`);
     return '';
 }
 
@@ -45,9 +65,6 @@ function generate(): void {
     const repo = "ccasJay/Lumina-Note";
     const baseUrl = `https://github.com/${repo}/releases/download/v${version}`;
 
-    // We generate entries for both macOS architectures. 
-    // In a real CI, you might only have one available at a time, 
-    // but we can prepare the structure.
     const info: UpdaterInfo = {
         version,
         notes,
@@ -60,9 +77,20 @@ function generate(): void {
             "darwin-x86_64": {
                 signature: getSignature("darwin", "x86_64"),
                 url: `${baseUrl}/lumina-note_${version}_x64.app.tar.gz`
+            },
+            "windows-x86_64": {
+                signature: getSignature("windows", "x64"),
+                url: `${baseUrl}/lumina-note_${version}_x64-setup.nsis.zip`
             }
         }
     };
+
+    // Clean up empty platforms (if signature is missing)
+    Object.keys(info.platforms).forEach(key => {
+        if (!info.platforms[key].signature) {
+            delete info.platforms[key];
+        }
+    });
 
     const outPath = path.resolve(process.cwd(), 'latest.json');
     fs.writeFileSync(outPath, JSON.stringify(info, null, 2));
