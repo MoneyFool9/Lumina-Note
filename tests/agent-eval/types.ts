@@ -52,16 +52,24 @@ export interface AgentResult {
 export interface TestCase {
   id: string;
   name: string;
-  category: 'basic' | 'complex' | 'edge-case' | 'regression';
+  category: 'basic' | 'complex' | 'edge-case' | 'regression' | 'mcp';
   
   // 输入
   input: string;
+  
+  // 描述（用于文档和理解）
+  description?: string;
+  
+  // 前置条件（MCP 测试需要）
+  precondition?: string[];
   
   // 预期（可选，用于评估）
   expectedTools?: string[];           // 预期使用的工具名
   expectedToolSequence?: string[];    // 预期工具调用顺序（严格匹配）
   expectedPlanSteps?: number;         // 预期计划步骤数
   expectedOutcome?: string;           // 预期结果描述（LLM 评判）
+  expectedBehavior?: string[];        // 预期行为描述（MCP 测试用）
+  expectedApproval?: boolean;         // 是否预期需要用户审批
   
   // 评估标准
   evaluationCriteria?: string[];      // LLM-as-Judge 评判标准

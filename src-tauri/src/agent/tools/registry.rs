@@ -5,6 +5,8 @@
 use crate::agent::types::*;
 use crate::agent::tools::fast_search::FastSearch;
 use crate::agent::commands::{ApprovalManager, ToolApprovalResponse};
+use crate::mcp::manager::McpManager;
+use crate::mcp::types::McpContentBlock;
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::Path;
@@ -46,10 +48,141 @@ impl ToolRegistry {
         self.auto_approve = auto_approve;
         self
     }
-    
+
     /// 检查工具是否需要审批
     fn needs_approval(&self, tool_name: &str) -> bool {
-        !self.auto_approve && DANGEROUS_TOOLS.contains(&tool_name)
+        if self.auto_approve {
+            return false;
+        }
+
+        // 本地危险工具
+        if DANGEROUS_TOOLS.contains(&tool_name) {
+            return true;
+        }
+
+        // MCP 工具：检查是否在 autoApprove 列表中（使用缓存）
+        if tool_name.starts_with("mcp_") {
+            if let Some((server_name, mcp_tool_name)) = Self::parse_mcp_tool_name(tool_name) {
+                // 使用 try_read 避免死锁
+                // 注意：manager 使用 autoApprove 缓存，即使锁竞争也能快速返回
+                if let Ok(manager) = McpManager::global().try_read() {
+                    if manager.is_auto_approved(&server_name, &mcp_tool_name) {
+                        return false;
+                    }
+                }
+                // 锁竞争或不在 autoApprove 列表中，默认需要审批
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// 解析 MCP 工具名称
+    ///
+    /// 格式: `mcp_{server_name}__{tool_name}`
+    ///
+    /// 注意：server_name 不应包含双下划线 `__`，因为它用作分隔符。
+    /// 如果 server_name 包含 `__`，解析结果将不正确。
+    fn parse_mcp_tool_name(full_name: &str) -> Option<(String, String)> {
+        let name_without_prefix = full_name.strip_prefix("mcp_")?;
+        let parts: Vec<&str> = name_without_prefix.splitn(2, "__").collect();
+        if parts.len() == 2 {
+            Some((parts[0].to_string(), parts[1].to_string()))
+        } else {
+            None
+        }
+    }
+
+    /// 执行 MCP 工具
+    async fn execute_mcp_tool(&self, tool_call: &ToolCall) -> ToolResult {
+        let (server_name, tool_name) = match Self::parse_mcp_tool_name(&tool_call.name) {
+            Some(parsed) => parsed,
+            None => {
+                return ToolResult {
+                    tool_call_id: tool_call.id.clone(),
+                    success: false,
+                    content: String::new(),
+                    error: Some(format!("Invalid MCP tool name format: {}", tool_call.name)),
+                };
+            }
+        };
+
+        // 构建参数 JSON
+        let arguments = serde_json::Value::Object(
+            tool_call
+                .params
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        );
+
+        // P1 修复：获取 client 的 Arc 克隆后立即释放锁
+        // 这样异步调用期间不会阻塞其他操作（如 reload）
+        let client = {
+            let global = McpManager::global();
+            let manager = global.read().await;
+            manager.get_client(&server_name)
+        };
+
+        let client = match client {
+            Some(c) => c,
+            None => {
+                return ToolResult {
+                    tool_call_id: tool_call.id.clone(),
+                    success: false,
+                    content: String::new(),
+                    error: Some(format!("MCP server '{}' not connected", server_name)),
+                };
+            }
+        };
+
+        // 在锁释放后执行异步调用
+        let result = client.call_tool(&tool_name, arguments).await;
+
+        match result {
+            Ok(response) => {
+                // 转换 MCP 响应为 ToolResult
+                let content: String = response
+                    .content
+                    .iter()
+                    .filter_map(|block| match block {
+                        McpContentBlock::Text { text } => Some(text.clone()),
+                        McpContentBlock::Resource { resource } => resource.text.clone(),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                // P2 修复：错误时保留实际错误内容
+                let error = if response.is_error {
+                    Some(if content.is_empty() {
+                        "MCP tool returned error".to_string()
+                    } else {
+                        format!("MCP error: {}", content)
+                    })
+                } else {
+                    None
+                };
+
+                ToolResult {
+                    tool_call_id: tool_call.id.clone(),
+                    success: !response.is_error,
+                    content: if response.is_error {
+                        String::new()
+                    } else {
+                        content
+                    },
+                    error,
+                }
+            }
+            Err(e) => ToolResult {
+                tool_call_id: tool_call.id.clone(),
+                success: false,
+                content: String::new(),
+                error: Some(e),
+            },
+        }
     }
     
     /// 等待用户审批
@@ -118,6 +251,11 @@ impl ToolRegistry {
                     };
                 }
             }
+        }
+        
+        // MCP 工具执行（格式: mcp_{server_name}__{tool_name}）
+        if tool_call.name.starts_with("mcp_") {
+            return self.execute_mcp_tool(tool_call).await;
         }
         
         let result = match tool_call.name.as_str() {

@@ -7,6 +7,7 @@ mod vector_db;
 mod llm;
 pub mod agent;
 pub mod langgraph;
+pub mod mcp;
 
 pub use commands::*;
 pub use error::*;
@@ -27,4 +28,10 @@ pub use agent::{
     agent_get_status, agent_continue_with_answer,
     agent_enable_debug, agent_disable_debug, 
     agent_is_debug_enabled, agent_get_debug_log_path,
+};
+
+// Re-export MCP commands
+pub use mcp::{
+    mcp_init, mcp_list_servers, mcp_start_server, mcp_stop_server,
+    mcp_list_tools, mcp_reload, mcp_test_tool, mcp_shutdown,
 };
