@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { getCurrentTranslations } from "./useLocaleStore";
 
 export interface SlashCommand {
     id: string;
@@ -16,29 +17,36 @@ interface CommandState {
     unregisterCommand: (key: string) => void; // Keep for backward compatibility if needed, or remove
 }
 
+// 根据当前语言获取默认命令
+export const getDefaultCommands = (): SlashCommand[] => {
+    const t = getCurrentTranslations();
+
+    return [
+        {
+            id: "default-explain",
+            key: "explain",
+            description: t.ai.slashCommands.explain,
+            prompt: t.ai.slashCommands.explainPrompt,
+        },
+        {
+            id: "default-fix",
+            key: "fix",
+            description: t.ai.slashCommands.fix,
+            prompt: t.ai.slashCommands.fixPrompt,
+        },
+        {
+            id: "default-translate",
+            key: "translate",
+            description: t.ai.slashCommands.translate,
+            prompt: t.ai.slashCommands.translatePrompt,
+        },
+    ];
+};
+
 export const useCommandStore = create<CommandState>()(
     persist(
         (set) => ({
-            commands: [
-                {
-                    id: "default-explain",
-                    key: "explain",
-                    description: "解释代码",
-                    prompt: "请详细解释这段代码：\n",
-                },
-                {
-                    id: "default-fix",
-                    key: "fix",
-                    description: "修复 Bug",
-                    prompt: "请修复以下代码中的 Bug：\n",
-                },
-                {
-                    id: "default-translate",
-                    key: "translate",
-                    description: "翻译成中文",
-                    prompt: "请将以下内容翻译成中文：\n",
-                },
-            ],
+            commands: getDefaultCommands(),
             registerCommand: (cmd) =>
                 set((state) => ({
                     commands: [

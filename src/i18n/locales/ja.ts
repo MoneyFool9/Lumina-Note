@@ -73,6 +73,18 @@ export default {
   // AI アシスタント
   ai: {
     chat: 'AI アシスタント',
+    // スラッシュコマンド
+    slashCommands: {
+      shortcuts: 'ショートカット',
+      noCommandsFound: 'コマンドが見つかりません',
+      createShortcut: 'ショートカットを作成',
+      explain: 'コードを説明',
+      explainPrompt: 'このコードを詳しく説明してください：\n',
+      fix: 'バグを修正',
+      fixPrompt: '次のコードのバグを修正してください：\n',
+      translate: '日本語に翻訳',
+      translatePrompt: '次の内容を日本語に翻訳してください：\n',
+    },
     thinking: '考え中...',
     askAnything: '何でも質問してください...',
     settings: 'AI 設定',

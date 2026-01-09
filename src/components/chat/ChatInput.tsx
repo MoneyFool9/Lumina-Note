@@ -676,13 +676,13 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
           className="absolute bottom-full left-0 mb-1 w-64 bg-background border border-border rounded-lg shadow-lg z-50 flex flex-col overflow-hidden"
         >
           <div className="px-3 py-2 text-xs text-muted-foreground font-medium bg-muted/30 border-b border-border">
-            快捷方式
+            {t.ai.slashCommands.shortcuts}
           </div>
 
           <div className="max-h-52 overflow-y-auto">
             {filteredCommands.length === 0 ? (
               <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                未找到命令
+                {t.ai.slashCommands.noCommandsFound}
               </div>
             ) : (
               filteredCommands.map((cmd, index) => (
@@ -730,7 +730,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(({
             className="w-full text-left px-3 py-2.5 text-sm hover:bg-accent border-t border-border flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus size={14} />
-            创建快捷方式
+            {t.ai.slashCommands.createShortcut}
           </button>
         </div>
       )}

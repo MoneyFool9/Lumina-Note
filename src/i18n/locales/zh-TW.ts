@@ -73,6 +73,18 @@ export default {
   // AI 助手
   ai: {
     chat: 'AI 助手',
+    // 斜杠命令
+    slashCommands: {
+      shortcuts: '快捷方式',
+      noCommandsFound: '未找到命令',
+      createShortcut: '創建快捷方式',
+      explain: '解釋代碼',
+      explainPrompt: '請詳細解釋這段代碼：\n',
+      fix: '修復 Bug',
+      fixPrompt: '請修復以下代碼中的 Bug：\n',
+      translate: '翻譯成中文',
+      translatePrompt: '請將以下內容翻譯成中文：\n',
+    },
     thinking: '思考中...',
     askAnything: '問任何問題...',
     settings: 'AI 設定',

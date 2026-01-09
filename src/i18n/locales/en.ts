@@ -73,6 +73,18 @@ export default {
   // AI Assistant
   ai: {
     chat: 'AI Assistant',
+    // Slash Commands
+    slashCommands: {
+      shortcuts: 'Shortcuts',
+      noCommandsFound: 'No commands found',
+      createShortcut: 'Create shortcut',
+      explain: 'Explain code',
+      explainPrompt: 'Please explain this code in detail:\n',
+      fix: 'Fix bug',
+      fixPrompt: 'Please fix the bug in the following code:\n',
+      translate: 'Translate to English',
+      translatePrompt: 'Please translate the following content to English:\n',
+    },
     thinking: 'Thinking...',
     askAnything: 'Ask anything...',
     settings: 'AI Settings',
