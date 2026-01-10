@@ -34,7 +34,7 @@ const modeIcons: Record<EditorMode, React.ReactNode> = {
 };
 
 // 局部图谱展开状态（组件外部以保持状态）
-let localGraphExpandedState = true;
+let localGraphExpandedState = false;
 
 export function Editor() {
   const { t } = useLocaleStore();
