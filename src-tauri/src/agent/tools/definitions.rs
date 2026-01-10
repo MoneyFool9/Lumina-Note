@@ -3,8 +3,9 @@
 //! 所有可用工具的 JSON Schema 定义
 
 use serde_json::{json, Value};
+use crate::mcp::manager::McpManager;
 
-/// 获取所有工具定义
+/// 获取所有工具定义（同步版本，不含 MCP）
 pub fn get_all_tool_definitions() -> Vec<Value> {
     vec![
         update_plan_definition(),
@@ -27,7 +28,31 @@ pub fn get_all_tool_definitions() -> Vec<Value> {
     ]
 }
 
-/// 根据 Agent 类型获取工具
+/// 获取所有工具定义（包括 MCP 工具）
+pub async fn get_all_tool_definitions_with_mcp() -> Vec<Value> {
+    let mut tools = get_all_tool_definitions();
+
+    // 添加 MCP 工具
+    let global = McpManager::global();
+    let manager = global.read().await;
+    for (server_name, mcp_tool) in manager.get_all_tools() {
+        tools.push(json!({
+            "type": "function",
+            "function": {
+                "name": format!("mcp_{}__{}", server_name, mcp_tool.name),
+                "description": format!("[MCP:{}] {}",
+                    server_name,
+                    mcp_tool.description.as_deref().unwrap_or("No description")
+                ),
+                "parameters": mcp_tool.input_schema
+            }
+        }));
+    }
+
+    tools
+}
+
+/// 根据 Agent 类型获取工具（同步版本，不含 MCP）
 pub fn get_tools_for_agent(agent: &str) -> Vec<Value> {
     match agent {
         "editor" => vec![
@@ -48,7 +73,7 @@ pub fn get_tools_for_agent(agent: &str) -> Vec<Value> {
             read_outline_definition(),
             read_section_definition(),
             list_notes_definition(),
-            fast_search_definition(),  // 快速并行搜索 - 首选
+            fast_search_definition(), // 快速并行搜索 - 首选
             search_notes_definition(),
             grep_search_definition(),
             semantic_search_definition(),
@@ -79,6 +104,30 @@ pub fn get_tools_for_agent(agent: &str) -> Vec<Value> {
         ],
         _ => get_all_tool_definitions(),
     }
+}
+
+/// 根据 Agent 类型获取工具（包括 MCP 工具）
+pub async fn get_tools_for_agent_with_mcp(agent: &str) -> Vec<Value> {
+    let mut tools = get_tools_for_agent(agent);
+
+    // 添加 MCP 工具（所有 Agent 都可以使用）
+    let global = McpManager::global();
+    let manager = global.read().await;
+    for (server_name, mcp_tool) in manager.get_all_tools() {
+        tools.push(json!({
+            "type": "function",
+            "function": {
+                "name": format!("mcp_{}__{}", server_name, mcp_tool.name),
+                "description": format!("[MCP:{}] {}",
+                    server_name,
+                    mcp_tool.description.as_deref().unwrap_or("No description")
+                ),
+                "parameters": mcp_tool.input_schema
+            }
+        }));
+    }
+
+    tools
 }
 
 fn read_note_definition() -> Value {

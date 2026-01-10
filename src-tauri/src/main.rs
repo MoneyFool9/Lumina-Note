@@ -13,6 +13,7 @@ mod cef;
 mod webdav;
 mod langgraph;
 mod agent;
+mod mcp;
 
 use tauri::Manager;
 
@@ -125,6 +126,15 @@ fn main() {
             agent::deep_research_resume,
             agent::deep_research_abort,
             agent::deep_research_is_running,
+            // MCP commands
+            mcp::mcp_init,
+            mcp::mcp_list_servers,
+            mcp::mcp_start_server,
+            mcp::mcp_stop_server,
+            mcp::mcp_list_tools,
+            mcp::mcp_reload,
+            mcp::mcp_test_tool,
+            mcp::mcp_shutdown,
         ])
         .manage(webdav::commands::WebDAVState::new())
         .manage(agent::AgentState::new())

@@ -46,6 +46,18 @@ export default {
     toggleSidebar: '切换侧边栏',
     toggleAIPanel: '切换 AI 面板',
   },
+
+  favorites: {
+    title: '收藏夹',
+    add: '加入收藏',
+    remove: '取消收藏',
+    empty: '暂无收藏',
+    sortManual: '手动',
+    sortRecentAdded: '最近收藏',
+    sortRecentOpened: '最近打开',
+    moveUp: '上移',
+    moveDown: '下移',
+  },
   
   // 编辑器
   editor: {
@@ -386,6 +398,24 @@ export default {
       solarized: { name: '日蚀', description: '护眼高对比：暖米色背景 + 蓝/橙/红/绿 组合' },
       gruvbox: { name: '复古', description: '暖调怀旧：大地色背景 + 红绿蓝黄撞色' },
     },
+  updateChecker: {
+    title: '????',
+    descIdle: '?????',
+    descUpToDate: '????????',
+    descAvailable: '????? v{version}',
+    descDownloading: '??????...',
+    descInstalling: '????...',
+    descReady: '?????',
+    descError: '????',
+    actionCheck: '????',
+    actionInstall: '?????',
+    actionRelaunch: '????',
+    versionLabel: '?? {version}',
+    noChangelog: '??????',
+    preparing: '???...',
+    readyHint: '??????????????????',
+  },
+
     editor: '编辑器',
     defaultEditMode: '默认编辑模式',
     defaultEditModeDesc: '打开文件时的默认视图',

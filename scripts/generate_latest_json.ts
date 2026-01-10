@@ -62,7 +62,7 @@ function generate(): void {
     const notes = `Lumina Note version ${version}`;
     const pub_date = new Date().toISOString();
 
-    const repo = "ccasJay/Lumina-Note";
+    const repo = process.env.GITHUB_REPOSITORY || "blueberrycongee/Lumina-Note";
     const baseUrl = `https://github.com/${repo}/releases/download/v${version}`;
 
     const info: UpdaterInfo = {

@@ -46,6 +46,18 @@ export default {
     toggleSidebar: 'Toggle Sidebar',
     toggleAIPanel: 'Toggle AI Panel',
   },
+
+  favorites: {
+    title: 'Favorites',
+    add: 'Add to favorites',
+    remove: 'Remove favorite',
+    empty: 'No favorites yet',
+    sortManual: 'Manual',
+    sortRecentAdded: 'Recently added',
+    sortRecentOpened: 'Recently opened',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+  },
   
   // Editor
   editor: {
@@ -399,6 +411,24 @@ export default {
     about: 'About',
     appDescription: 'Local-first AI-powered note-taking app',
     confirmDeleteTheme: 'Delete theme "{name}"?',
+  },
+
+  updateChecker: {
+    title: 'Software Update',
+    descIdle: 'Check for updates',
+    descUpToDate: 'You are up to date',
+    descAvailable: 'New version found v{version}',
+    descDownloading: 'Downloading update...',
+    descInstalling: 'Installing...',
+    descReady: 'Update is ready',
+    descError: 'Update failed',
+    actionCheck: 'Check updates',
+    actionInstall: 'Download and install',
+    actionRelaunch: 'Restart to apply',
+    versionLabel: 'Version {version}',
+    noChangelog: 'No release notes',
+    preparing: 'Preparing...',
+    readyHint: 'Update downloaded and installed. Please restart the app to apply.',
   },
 
   // Video Note

@@ -4,7 +4,7 @@
 
 use crate::agent::types::*;
 use crate::agent::llm_client::LlmClient;
-use crate::agent::tools::{get_tools_for_agent, ToolRegistry};
+use crate::agent::tools::{get_tools_for_agent_with_mcp, ToolRegistry};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 
@@ -327,7 +327,8 @@ async fn agent_worker_node(
     use crate::agent::messages::{ChatChunks, FORMAT_REMINDER};
     use crate::agent::debug_log as dbg;
     
-    let tools = get_tools_for_agent(agent_name);
+    // 使用异步版本获取工具（包含 MCP 工具）
+    let tools = get_tools_for_agent_with_mcp(agent_name).await;
     let tool_registry = ToolRegistry::new(state.workspace_path.clone())
         .with_app(app.clone())
         .with_auto_approve(state.auto_approve);
