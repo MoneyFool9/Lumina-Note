@@ -56,7 +56,7 @@
       "requireLiteralLeadingDot": false
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDRThDRUVGNjA2OUE4M0IKUldRN3FHbGc3ODdvbktHMnU2TGdrRUJ3aGNLUDMweHhsRFZJSEhlNy9JZ1N5eU5mQjNXbjUzdW8K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA5RkEwQTZEQkY2MjA5RkQKUldUOUNXSy9iUXI2Q1I3OVdrQXpTRU90ZFN5SXMxUE4yaXB1emNzc3dOdzlwUEdNdHhtbTNWSlcK",
       "endpoints": [
         "https://github.com/blueberrycongee/Lumina-Note/releases/latest/download/latest.json"
       ]
