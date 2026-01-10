@@ -154,13 +154,14 @@ export function AIFloatingPanel({ ballPosition, onDock }: AIFloatingPanelProps) 
     <div
       ref={panelRef}
       className={`fixed z-50 bg-background border border-border rounded-xl shadow-2xl overflow-hidden transition-all duration-200 ${
-        isDraggingFileOver ? "ring-2 ring-primary ring-inset bg-primary/5" : ""
+        isDraggingFileOver ? "ring-2 ring-primary ring-inset" : ""
       }`}
       style={{
         left: position.x,
         top: position.y,
         width: 420,
         height: 500,
+        backgroundColor: "hsl(var(--background))",
       }}
     >
       <div className="flex h-full">
