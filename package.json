@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate-latest": "ts-node scripts/generate_latest_json.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
@@ -30,7 +31,9 @@
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
     "@tauri-apps/plugin-os": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "@types/diff": "^7.0.2",
     "clsx": "^2.1.1",
     "codemirror-live-markdown": "^0.5.0-alpha.1",
@@ -70,6 +73,7 @@
     "jsdom": "^27.2.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
+    "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^1.6.1"

@@ -413,6 +413,24 @@ export default {
     confirmDeleteTheme: 'Delete theme "{name}"?',
   },
 
+  updateChecker: {
+    title: 'Software Update',
+    descIdle: 'Check for updates',
+    descUpToDate: 'You are up to date',
+    descAvailable: 'New version found v{version}',
+    descDownloading: 'Downloading update...',
+    descInstalling: 'Installing...',
+    descReady: 'Update is ready',
+    descError: 'Update failed',
+    actionCheck: 'Check updates',
+    actionInstall: 'Download and install',
+    actionRelaunch: 'Restart to apply',
+    versionLabel: 'Version {version}',
+    noChangelog: 'No release notes',
+    preparing: 'Preparing...',
+    readyHint: 'Update downloaded and installed. Please restart the app to apply.',
+  },
+
   // Video Note
   videoNote: {
     title: 'Video Note',
