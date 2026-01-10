@@ -175,7 +175,7 @@ export function SlashMenu({ view }: SlashMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-popover border border-border rounded-lg shadow-lg overflow-hidden"
+      className="fixed z-50 bg-background border border-border rounded-lg shadow-lg overflow-hidden"
       style={{
         left: position.x,
         top: position.y,
@@ -191,7 +191,7 @@ export function SlashMenu({ view }: SlashMenuProps) {
           
           return (
             <div key={cat}>
-              <div className="px-2 py-1 text-xs text-muted-foreground font-medium sticky top-0 bg-popover">
+              <div className="px-2 py-1 text-xs text-muted-foreground font-medium sticky top-0 bg-background">
                 {categoryLabels[cat]}
               </div>
               {commands.map(cmd => {
